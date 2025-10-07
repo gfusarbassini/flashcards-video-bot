@@ -11,7 +11,7 @@ API_VERSION = "v23.0"
 GRAPH_URL = f"https://graph.facebook.com/{API_VERSION}"
 
 # --- PERCORSI ASSOLUTI ---
-BASE_DIR = "/Users/gabrielefusarbassini/Desktop/flashcards"
+BASE_DIR = ""
 CSV_FILE = os.path.join(BASE_DIR, "russo_parole.csv")
 VIDEO_BASE_URL = "http://roadtominds.altervista.org/Flashcards/"
 
