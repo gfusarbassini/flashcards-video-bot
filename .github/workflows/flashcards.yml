@@ -30,10 +30,11 @@ jobs:
       - name: Run flashcards script
         run: python3 flashcards_video.py
 
-      - name: Commit and push changes
+      - name: Commit updated files
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add flashcards.csv
-          git commit -m "Update flashcards CSV automatically" || echo "No changes to commit"
+          git add russo_parole.csv stato_pubblicazione.csv last_reset.txt || echo "No files to add"
+          git commit -m "Update flashcards data" || echo "No changes to commit"
           git push
+
