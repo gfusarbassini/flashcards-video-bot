@@ -5,6 +5,8 @@ import time
 import requests
 import os
 
+ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
+
 # --- CONFIG ---
 IG_USER_ID = "17841477441673896"
 API_VERSION = "v23.0"
