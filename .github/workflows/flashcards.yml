@@ -8,6 +8,9 @@ on:
 permissions:
   contents: write  # serve per fare il commit automatico
 
+env:
+  ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+
 jobs:
   run-script:
     runs-on: ubuntu-latest
