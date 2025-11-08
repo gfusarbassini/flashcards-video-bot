@@ -42,4 +42,4 @@ jobs:
           commit_message: 'Aggiunto da Telegram: ${{ steps.extract_word.outputs.word }}'
           commit_author: 'Telegram Bot <action@github.com>'
           # Utilizza il Secret creato nel repository
-          token: ${{ secrets.REPO_PAT }}
+          token: ${{ secrets.ACCESS_TOKEN }}
