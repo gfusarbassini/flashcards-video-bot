@@ -1,12 +1,18 @@
-name: Aggiungi Parola a CSV
+name: Aggiungi Parola a CSV da Telegram
 
 on:
+  # Questo trigger è essenziale per accettare la richiesta POST da Make (Webhooks)
   repository_dispatch:
+    # Il valore in 'types' DEVE CORRISPONDERE esattamente a 'event_type'
+    # inviato nel body JSON da Make (es. "telegram_update_csv").
     types: [telegram_update_csv]
 
 jobs:
   update-csv:
+    # Esegui l'azione sull'ultima versione di Ubuntu
     runs-on: ubuntu-latest
+    
+    # I passaggi (steps) per aggiornare il file
     steps:
       - name: Checkout del codice
         uses: actions/checkout@v4
@@ -14,27 +20,26 @@ jobs:
       - name: Estrai la parola dal payload
         id: extract_word
         run: |
-          # Il payload di IFTTT invia la parola chiave e la parola da aggiungere.
-          # Ad esempio: "aggiungi parola_da_salvare"
-          # Rimuovi la parola chiave "aggiungi " (con lo spazio)
-          #
-          # NOTA: La logica di estrazione potrebbe richiedere aggiustamenti
-          # a seconda di come IFTTT formatta esattamente MessageText.
+          # Il dato che ci interessa è contenuto in 'client_payload.word_to_add'
+          # che Make ha inviato. 
+          # Variabile d'ambiente: github.event.client_payload.word_to_add
           
-          FULL_MESSAGE="${{ github.event.client_payload.word_to_add }}"
-          # Rimuove la prima parola (il trigger di IFTTT) e lo spazio successivo
-          WORD=$(echo "$FULL_MESSAGE" | sed 's/^[^ ]* //')
+          WORD="${{ github.event.client_payload.word_to_add }}"
           echo "La parola estratta è: $WORD"
+          
+          # Passa la parola come output per i passi successivi
           echo "word=$WORD" >> $GITHUB_OUTPUT
 
       - name: Aggiungi la parola al CSV
         run: |
-          echo \"${{ steps.extract_word.outputs.word }}\" >> dati.csv
+          # Aggiunge la parola al file dati.csv, con una nuova riga
+          echo "${{ steps.extract_word.outputs.word }}" >> dati.csv
           
       - name: Commit e push
+        # Usa un'azione esterna per committare e fare il push
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: 'Aggiunto da Telegram: ${{ steps.extract_word.outputs.word }}'
           commit_author: 'Telegram Bot <action@github.com>'
-          # Utilizza il PAT per permettere alla Action di fare il push
+          # Utilizza il Secret creato nel repository
           token: ${{ secrets.REPO_PAT }}
