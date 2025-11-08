@@ -1,0 +1,40 @@
+name: Aggiungi Parola a CSV
+
+on:
+  repository_dispatch:
+    types: [telegram_update_csv]
+
+jobs:
+  update-csv:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout del codice
+        uses: actions/checkout@v4
+        
+      - name: Estrai la parola dal payload
+        id: extract_word
+        run: |
+          # Il payload di IFTTT invia la parola chiave e la parola da aggiungere.
+          # Ad esempio: "aggiungi parola_da_salvare"
+          # Rimuovi la parola chiave "aggiungi " (con lo spazio)
+          #
+          # NOTA: La logica di estrazione potrebbe richiedere aggiustamenti
+          # a seconda di come IFTTT formatta esattamente MessageText.
+          
+          FULL_MESSAGE="${{ github.event.client_payload.word_to_add }}"
+          # Rimuove la prima parola (il trigger di IFTTT) e lo spazio successivo
+          WORD=$(echo "$FULL_MESSAGE" | sed 's/^[^ ]* //')
+          echo "La parola estratta è: $WORD"
+          echo "word=$WORD" >> $GITHUB_OUTPUT
+
+      - name: Aggiungi la parola al CSV
+        run: |
+          echo \"${{ steps.extract_word.outputs.word }}\" >> dati.csv
+          
+      - name: Commit e push
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'Aggiunto da Telegram: ${{ steps.extract_word.outputs.word }}'
+          commit_author: 'Telegram Bot <action@github.com>'
+          # Utilizza il PAT per permettere alla Action di fare il push
+          token: ${{ secrets.REPO_PAT }}
