@@ -198,7 +198,7 @@ def main():
         # Gestione del reset del ciclo (step = 12 nel tuo schema)
         if step > 12: 
             step = 0
-            cycle += 3 
+            cycle += 1 
             print(f"🔁 Ciclo completato. Reset: Prossimo Cycle={cycle}, Prossimo Step={step}")
         else:
             print(f"➡️ Aggiornamento: Prossimo Cycle={cycle}, Prossimo Step={step}")
