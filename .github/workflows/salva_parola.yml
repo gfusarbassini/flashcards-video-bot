@@ -3,9 +3,9 @@ name: Aggiungi Parola a CSV tramite Input
 on:
   workflow_dispatch:
     inputs:
-      new_word:
-        description: 'La parola da aggiungere a test_parole.csv'
-        required: true
+      parola_russo:
+        description: 'La parola russa da salvare'
+        required: true 
         type: string
 
 permissions:
