@@ -23,8 +23,8 @@ jobs:
       - name: Configura Git
         # Configura l'utente che farà il commit
         run: |
-          git config user.name "GitHub Actions Bot"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
           
       - name: Verifica e crea il file CSV (se non esiste)
         run: |
