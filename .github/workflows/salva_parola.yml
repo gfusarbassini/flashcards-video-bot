@@ -46,8 +46,8 @@ jobs:
           echo "$PAROLA,$TIMESTAMP" >> test_parole.csv
           
       - name: Commit e push delle modifiche
-        # Esegue il commit solo se ci sono state modifiche
-        run: |
-          git add test_parole.csv
-          git commit -m "Aggiunta parola russa: ${{ github.event.inputs.parola_russo }} [skip ci]"
-          git push
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.ACCESS_TOKEN }}
+          branch: main # O il nome del tuo branch, ad esempio 'master'
+          commit_message: "Aggiunta parola russa: ${{ github.event.inputs.parola_russo }} [skip ci]"
