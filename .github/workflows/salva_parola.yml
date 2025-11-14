@@ -29,7 +29,7 @@ jobs:
 
       # Esegue lo script Python, passando la parola come argomento
       - name: Esegui script di aggiunta
-        run: python3 append_word.py "${{ github.event.inputs.new_word }}"
+        run: python3 append_word.py "${{ github.event.inputs.parola_russo }}"
 
       - name: Commit aggiornamento
         run: |
@@ -37,5 +37,5 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           # Aggiunge solo il file CSV che hai modificato
           git add test_parole.csv
-          git commit -m "Aggiunta nuova parola: ${{ github.event.inputs.new_word }}" || echo "Nessun cambiamento da committare"
+          git commit -m "Aggiunta nuova parola: ${{ github.event.inputs.parola_russo }}" || echo "Nessun cambiamento da committare"
           git push
