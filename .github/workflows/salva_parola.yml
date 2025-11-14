@@ -1,53 +1,35 @@
-name: Salva Parola Russa da Telegram
+name: Aggiungi Parola a CSV
 
-# Questo workflow si attiva solo manualmente tramite API call (workflow_dispatch)
 on:
   workflow_dispatch:
     inputs:
-      parola_russo:
-        description: 'La parola in russo inviata dal bot Telegram.'
+      new_word:
+        description: 'La nuova parola da aggiungere al file test_parole.csv'
         required: true
         type: string
 
+permissions:
+  contents: write # Serve per l'azione di commit
+
 jobs:
-  append_to_csv:
+  add-word:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout del codice
-        # Scarica il repository per poter modificare i file
+      - name: Checkout repository
         uses: actions/checkout@v4
-        # Necessario per i commit/push
+
+      # Utilizza un'azione per manipolare i file CSV
+      - name: Aggiungi la parola al CSV e fai il commit
+        uses: csv-actions/csv-actions@v1.4.0
         with:
-          token: ${{ secrets.ACCESS_TOKEN }}
-          
-      - name: Configura Git
-        # Configura l'utente che farà il commit
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          
-      - name: Verifica e crea il file CSV (se non esiste)
-        run: |
-          FILE="test_parole.csv"
-          # Controlla se il file esiste e ha intestazioni, altrimenti lo crea
-          if [ ! -f $FILE ] || ! head -1 $FILE | grep -q "Parola"; then
-            echo "Parola,Timestamp" > $FILE
-          fi
-          
-      - name: Aggiungi la parola al CSV
-        id: append_word
-        run: |
-          # Ottieni l'input passato dal bot
-          PAROLA="${{ github.event.inputs.parola_russo }}"
-          # Ottieni il timestamp attuale
-          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-          
-          # Aggiungi la nuova riga al file CSV
-          echo "$PAROLA,$TIMESTAMP" >> test_parole.csv
-          
-      - name: Commit e push delle modifiche
-        uses: ad-m/github-push-action@master
-        with:
-          github_token: ${{ secrets.ACCESS_TOKEN }}
-          branch: main # O il nome del tuo branch, ad esempio 'master'
-          commit_message: "Aggiunta parola russa: ${{ github.event.inputs.parola_russo }} [skip ci]"
+          # Il file CSV target
+          filename: test_parole.csv
+          # L'azione è "append" (aggiungi)
+          action: append
+          # I dati da aggiungere. Deve corrispondere alle colonne del tuo CSV.
+          # Ad esempio, se il tuo CSV ha una colonna "Parola", usa 'Parola':
+          data: |
+            "Parola":"${{ github.event.inputs.new_word }}"
+          # Configurazione per il commit
+          commit_message: "Aggiunta nuova parola: ${{ github.event.inputs.new_word }}"
+          github_token: ${{ secrets.ACCESS_TOKEN }} # Token predefinito per il commit
