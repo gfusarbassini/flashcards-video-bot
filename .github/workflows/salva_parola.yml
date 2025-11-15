@@ -5,42 +5,37 @@ on:
     inputs:
       parola_russo:
         description: 'La parola russa da salvare'
-        required: true 
+        required: true
         type: string
 
 permissions:
-  contents: write # Permesso necessario per il commit
+  contents: write
 
 jobs:
   add-word:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Esegui script di aggiunta
-        run: python3 append_word.py "${{ github.event.inputs.parola_russo }}"
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      # Installazione di Pandas (necessario per manipolare CSV in Python)
       - name: Install dependencies
         run: pip install pandas google-genai
 
-      # Esegue lo script Python, passando la parola come argomento
-      - name: Esegui script di aggiunta
+      - name: Run append script
         run: python3 append_word.py "${{ github.event.inputs.parola_russo }}"
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
       - name: Commit aggiornamento
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          # Aggiunge solo il file CSV che hai modificato
           git add test_parole.csv
           git commit -m "Aggiunta nuova parola: ${{ github.event.inputs.parola_russo }}" || echo "Nessun cambiamento da committare"
           git push
