@@ -25,7 +25,7 @@ jobs:
 
       # Installazione di Pandas (necessario per manipolare CSV in Python)
       - name: Install dependencies
-        run: pip install pandas
+        run: pip install pandas google-genai
 
       # Esegue lo script Python, passando la parola come argomento
       - name: Esegui script di aggiunta
