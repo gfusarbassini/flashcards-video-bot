@@ -18,6 +18,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Esegui script di aggiunta
+        run: python3 append_word.py "${{ github.event.inputs.parola_russo }}"
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
