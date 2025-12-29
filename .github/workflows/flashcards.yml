@@ -2,12 +2,16 @@ name: Run flashcards script
 
 on:
   workflow_dispatch:
+  repository_dispatch:
+    types: [telegram_trigger] # <--- Questo è il "gancio" per il PHP
 
 permissions:
-  contents: write  # serve per fare il commit automatico
+  contents: write
 
 env:
   ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+  # Recuperiamo il testo da Telegram e lo passiamo come variabile d'ambiente
+  TELEGRAM_TEXT: ${{ github.event.client_payload.telegram_text }}
 
 jobs:
   run-script:
@@ -33,6 +37,5 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add russo_parole.csv stato_pubblicazione.csv last_reset.txt || echo "No files to add"
-          git commit -m "Update flashcards data" || echo "No changes to commit"
+          git commit -m "Update flashcards data (Trigger: ${{ github.event.client_payload.source || 'Manual' }})" || echo "No changes to commit"
           git push
-
