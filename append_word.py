@@ -48,7 +48,7 @@ def generate_csv_record(input_word):
     try:
         print(f"Chiamata a Gemini per elaborare '{input_word}'...")
         response = client.models.generate_content(
-            model='gemini-2.0-flash', 
+            model='gemini-3-flash-preview', 
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.1 # Temperatura ancora più bassa per massima precisione
