@@ -50,7 +50,7 @@ def generate_csv_record(input_word):
     
     try:
         response = client.models.generate_content(
-            model='gemini-2.0-flash',
+            model='gemini-3-flash-preview',
             contents=prompt,
             config=types.GenerateContentConfig(temperature=0.1)
         )
