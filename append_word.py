@@ -85,7 +85,7 @@ def generate_csv_record(input_word):
         "Rispondi SOLO con una riga CSV rigorosa (6 campi): "
         "1.Parola(RU), 2.Traduzione(IT), 3.Spiegazione(SOLO IN RUSSO SEMPLICE LIVELLO A1+), 4.Nota, 5.Esempio(RU-IT), 6.Video(lascia vuoto)."
     )
-    response = client.models.generate_content(model='gemini-2.0-flash', contents=prompt)
+    response = client.models.generate_content(model='gemini-3-flash-preview', contents=prompt)
     return response.text.strip().replace('```csv', '').replace('```', '').split('\n')[0]
 
 if __name__ == "__main__":
