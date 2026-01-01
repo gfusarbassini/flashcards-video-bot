@@ -1,4 +1,4 @@
-name: Aggiungi Parola a CSV tramite Input
+name: Aggiungi Parola a CSV tramite Input o Telegram
 
 on:
   workflow_dispatch:
@@ -7,6 +7,8 @@ on:
         description: 'La parola russa da salvare'
         required: true
         type: string
+  repository_dispatch:
+    types: [telegram_trigger]
 
 permissions:
   contents: write
@@ -27,8 +29,18 @@ jobs:
       - name: Install dependencies
         run: pip install pandas google-genai
 
+      - name: Estrai Parola
+        id: get_word
+        run: |
+          # Logica per decidere da dove prendere la parola
+          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
+            echo "word=${{ github.event.client_payload.parola_russo }}" >> $GITHUB_OUTPUT
+          else
+            echo "word=${{ github.event.inputs.parola_russo }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Run append script
-        run: python3 append_word.py "${{ github.event.inputs.parola_russo }}"
+        run: python3 append_word.py "${{ steps.get_word.outputs.word }}"
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
@@ -37,5 +49,5 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add parole.csv
-          git commit -m "Aggiunta nuova parola: ${{ github.event.inputs.parola_russo }}" || echo "Nessun cambiamento da committare"
+          git commit -m "Aggiunta nuova parola: ${{ steps.get_word.outputs.word }}" || echo "Nessun cambiamento da committare"
           git push
