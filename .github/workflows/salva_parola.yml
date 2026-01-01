@@ -32,6 +32,14 @@ jobs:
           sudo sed -i 's/domain="coder" rights="none" pattern="PDF"/domain="coder" rights="read|write" pattern="PDF"/' /etc/ImageMagick-6/policy.xml
           sudo sed -i 's/domain="coder" rights="none" pattern="LABEL"/domain="coder" rights="read|write" pattern="LABEL"/' /etc/ImageMagick-6/policy.xml
 
+      - name: Install Unbounded Font
+        run: |
+          mkdir -p ~/.local/share/fonts
+          # Scarica il font Unbounded direttamente da Google Fonts (GitHub Mirror)
+          wget -O ~/.local/share/fonts/Unbounded.ttf "https://github.com/google/fonts/raw/main/ofl/unbounded/Unbounded%5Bwght%5D.ttf"
+          # Aggiorna la cache dei font di sistema
+          fc-cache -f -v
+      
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
