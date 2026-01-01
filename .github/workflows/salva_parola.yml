@@ -21,38 +21,30 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg libcairo2 libpango-1.0-0 libpangocairo-1.0-0 libgdk-pixbuf2.0-0 libffi-dev
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
-          pip install pandas google-genai gTTS requests pydub
+      - name: Install Python Libraries
+        run: pip install pandas google-genai gTTS requests pydub cairosvg moviepy
 
-      - name: Estrai Parola e ChatID
-        id: get_data
-        run: |
-          if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
-            echo "word=${{ github.event.client_payload.parola_russo }}" >> $GITHUB_OUTPUT
-            echo "chat_id=${{ github.event.client_payload.chat_id }}" >> $GITHUB_OUTPUT
-          else
-            echo "word=${{ github.event.inputs.parola_russo }}" >> $GITHUB_OUTPUT
-            echo "chat_id=''" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Run append script
+      - name: Run Script
         run: python3 append_word.py "${{ steps.get_data.outputs.word }}" "${{ steps.get_data.outputs.chat_id }}"
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
 
-      - name: Commit aggiornamento
+      - name: Commit & Push
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git add parole.csv
-          git commit -m "Aggiunta nuova parola: ${{ steps.get_word.outputs.word }}" || echo "Nessun cambiamento da committare"
+          git commit -m "Aggiunta parola e video per: ${{ steps.get_data.outputs.word }}" || echo "No changes"
           git push
