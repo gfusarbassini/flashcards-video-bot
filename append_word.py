@@ -129,14 +129,17 @@ if __name__ == "__main__":
     crea_video(parola_ru, trad_it, nota_wrap, os.path.join(BASI_DIR, "base_frame3.svg"), video_local_path)
     
     try:
-        # Creiamo l'oggetto FTP senza connetterci subito
         ftp = FTP()
-        # FORZIAMO la codifica Latin-1 per evitare l'UnicodeDecodeError di Altervista
         ftp.encoding = "latin-1" 
         
         print(f"Connessione a {FTP_HOST}...")
         ftp.connect(FTP_HOST)
         ftp.login(FTP_USER, FTP_PASS)
+        
+        # --- AGGIUNGI QUESTA RIGA ---
+        ftp.set_pasv(True) 
+        # ----------------------------
+
         ftp.cwd(FTP_DIR)
         
         with open(video_local_path, "rb") as f:
