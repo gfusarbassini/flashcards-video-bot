@@ -29,20 +29,22 @@ jobs:
       - name: Install dependencies
         run: pip install pandas google-genai
 
-      - name: Estrai Parola
-        id: get_word
+      - name: Estrai Parola e ChatID
+        id: get_data
         run: |
-          # Logica per decidere da dove prendere la parola
           if [ "${{ github.event_name }}" == "repository_dispatch" ]; then
             echo "word=${{ github.event.client_payload.parola_russo }}" >> $GITHUB_OUTPUT
+            echo "chat_id=${{ github.event.client_payload.chat_id }}" >> $GITHUB_OUTPUT
           else
             echo "word=${{ github.event.inputs.parola_russo }}" >> $GITHUB_OUTPUT
+            echo "chat_id=''" >> $GITHUB_OUTPUT
           fi
 
       - name: Run append script
-        run: python3 append_word.py "${{ steps.get_word.outputs.word }}"
+        run: python3 append_word.py "${{ steps.get_data.outputs.word }}" "${{ steps.get_data.outputs.chat_id }}"
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
 
       - name: Commit aggiornamento
         run: |
