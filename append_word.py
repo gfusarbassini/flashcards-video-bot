@@ -123,15 +123,31 @@ if __name__ == "__main__":
         msg = f"🇷🇺 *{parola_ru}*\n🇮🇹 {trad_it}\n\n📖 {new_row['Spiegazione'].iloc[0]}\n💬 {new_row['Esempio'].iloc[0]}"
         send_telegram(chat_id, msg, "voice.ogg", bot_token)
 
-    # 4. Video & FTP
+# 4. Video & FTP
     nota_wrap = wrap_text(f"{new_row['Nota'].iloc[0]} {new_row['Esempio'].iloc[0]}")
     video_local_path = os.path.join(ASSET_DIR, video_filename)
     crea_video(parola_ru, trad_it, nota_wrap, os.path.join(BASI_DIR, "base_frame3.svg"), video_local_path)
     
-    with FTP(FTP_HOST, FTP_USER, FTP_PASS) as ftp:
+    try:
+        # Creiamo l'oggetto FTP senza connetterci subito
+        ftp = FTP()
+        # FORZIAMO la codifica Latin-1 per evitare l'UnicodeDecodeError di Altervista
+        ftp.encoding = "latin-1" 
+        
+        print(f"Connessione a {FTP_HOST}...")
+        ftp.connect(FTP_HOST)
+        ftp.login(FTP_USER, FTP_PASS)
         ftp.cwd(FTP_DIR)
+        
         with open(video_local_path, "rb") as f:
             ftp.storbinary(f"STOR {video_filename}", f)
+        
+        ftp.quit()
+        print(f"✅ Caricato su FTP: {video_filename}")
+        
+    except Exception as e:
+        print(f"❌ Errore durante l'upload FTP: {e}")
+        # Non facciamo sys.exit(1) qui se vogliamo comunque salvare il CSV
 
     # 5. Save CSV aggiornato
     pd.concat([df_old, new_row], ignore_index=True).to_csv(CSV_FILE, index=False)
