@@ -28,6 +28,7 @@ jobs:
 
       - name: Install dependencies
         run: |
+          sudo apt-get update
           sudo apt-get install -y ffmpeg
           pip install pandas google-genai gTTS requests pydub
 
