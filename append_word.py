@@ -23,7 +23,6 @@ FTP_USER = "roadtominds"
 FTP_PASS = os.getenv("FTP_PASSWORD")
 FTP_DIR = "Flashcards"
 
-# --- FUNZIONI VIDEO ---
 def wrap_text(text, width=36):
     words = text.split()
     lines, line = [], []
@@ -56,7 +55,6 @@ def crea_video(parola, trad, nota_es_wrapped, base_file, out_video):
             cairosvg.svg2png(bytestring=svg.encode("utf-8"), write_to=tmp.name)
             return ImageClip(tmp.name).set_duration(duration)
 
-    # 1s Traduzione | 5s Countdown | 5s Finale
     clips.append(get_frame("", trad, "", 1))
     for i in range(5, 0, -1):
         clips.append(get_frame("", trad, str(i), 1))
@@ -65,7 +63,6 @@ def crea_video(parola, trad, nota_es_wrapped, base_file, out_video):
     video = concatenate_videoclips(clips, method="compose")
     video.write_videofile(out_video, fps=24, codec="libx264", audio=False, logger=None)
 
-# --- FUNZIONI TELEGRAM & AUDIO ---
 def send_telegram(chat_id, text, voice_path, token):
     base_url = f"https://api.telegram.org/bot{token}"
     requests.post(f"{base_url}/sendMessage", json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"})
@@ -80,11 +77,15 @@ def genera_audio(parola_russa, output_ogg):
     rallentato = audio._spawn(audio.raw_data, overrides={'frame_rate': int(audio.frame_rate * 0.75)})
     rallentato.set_frame_rate(audio.frame_rate).export(output_ogg, format="ogg", codec="libopus")
 
-# --- CORE LOGIC ---
 def generate_csv_record(input_word):
     client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
-    prompt = f"Analizza: '{input_word}'. Rispondi SOLO con una riga CSV: Parola(RU),Traduzione(IT),Spiegazione,Nota,Esempio,"
-    response = client.models.generate_content(model='gemini-3-flash-preview', contents=prompt)
+    # PROMPT AGGIORNATO: Spiegazione in Russo A1+
+    prompt = (
+        f"Analizza: '{input_word}'. Se è in italiano traduci in russo, altrimenti mantieni. "
+        "Rispondi SOLO con una riga CSV rigorosa (6 campi): "
+        "1.Parola(RU), 2.Traduzione(IT), 3.Spiegazione(SOLO IN RUSSO SEMPLICE LIVELLO A1+), 4.Nota, 5.Esempio(RU-IT), 6.Video(lascia vuoto)."
+    )
+    response = client.models.generate_content(model='gemini-2.0-flash', contents=prompt)
     return response.text.strip().replace('```csv', '').replace('```', '').split('\n')[0]
 
 if __name__ == "__main__":
@@ -94,30 +95,44 @@ if __name__ == "__main__":
     chat_id = sys.argv[2] if len(sys.argv) > 2 else None
     bot_token = os.getenv("TELEGRAM_TOKEN")
 
-    # 1. Gemini
-    line = generate_csv_record(input_word)
+    # 1. Caricamento CSV esistente per calcolare il numero del video
     cols = ['Parola', 'Traduzione', 'Spiegazione', 'Nota', 'Esempio', 'FileVideo']
+    if os.path.exists(CSV_FILE):
+        df_old = pd.read_csv(CSV_FILE)
+        current_count = len(df_old) + 21 # Parte da 21 se il CSV è vuoto
+    else:
+        df_old = pd.DataFrame(columns=cols)
+        current_count = 21
+
+    video_filename = f"{current_count:02d}_video.mp4"
+
+    # 2. Gemini
+    line = generate_csv_record(input_word)
     new_row = pd.read_csv(io.StringIO(line), header=None, names=cols, quotechar='"', skipinitialspace=True).fillna('')
+    
+    # Assegniamo il nome del video calcolato
+    new_row.at[0, 'FileVideo'] = video_filename
     
     parola_ru = str(new_row['Parola'].iloc[0])
     trad_it = str(new_row['Traduzione'].iloc[0])
 
-    # 2. Audio & Telegram
+    # 3. Audio & Telegram
     genera_audio(parola_ru, "voice.ogg")
     if chat_id and bot_token:
+        # Nota: La spiegazione qui sarà quella in russo generata da Gemini
         msg = f"🇷🇺 *{parola_ru}*\n🇮🇹 {trad_it}\n\n📖 {new_row['Spiegazione'].iloc[0]}\n💬 {new_row['Esempio'].iloc[0]}"
         send_telegram(chat_id, msg, "voice.ogg", bot_token)
 
-    # 3. Video & FTP
+    # 4. Video & FTP
     nota_wrap = wrap_text(f"{new_row['Nota'].iloc[0]} {new_row['Esempio'].iloc[0]}")
-    video_path = os.path.join(ASSET_DIR, f"{parola_ru}.mp4")
-    crea_video(parola_ru, trad_it, nota_wrap, os.path.join(BASI_DIR, "base_frame3.svg"), video_path)
+    video_local_path = os.path.join(ASSET_DIR, video_filename)
+    crea_video(parola_ru, trad_it, nota_wrap, os.path.join(BASI_DIR, "base_frame3.svg"), video_local_path)
     
     with FTP(FTP_HOST, FTP_USER, FTP_PASS) as ftp:
         ftp.cwd(FTP_DIR)
-        with open(video_path, "rb") as f:
-            ftp.storbinary(f"STOR {parola_ru}.mp4", f)
+        with open(video_local_path, "rb") as f:
+            ftp.storbinary(f"STOR {video_filename}", f)
 
-    # 4. Save CSV
-    df = pd.read_csv(CSV_FILE) if os.path.exists(CSV_FILE) else pd.DataFrame(columns=cols)
-    pd.concat([df, new_row], ignore_index=True).to_csv(CSV_FILE, index=False)
+    # 5. Save CSV aggiornato
+    pd.concat([df_old, new_row], ignore_index=True).to_csv(CSV_FILE, index=False)
+    print(f"✅ Completato: {video_filename} per {parola_ru}")
