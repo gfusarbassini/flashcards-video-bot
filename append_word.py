@@ -9,8 +9,7 @@ from google import genai
 from google.genai import types
 from gtts import gTTS
 from pydub import AudioSegment
-from moviepy.video.VideoClip import ImageClip
-from moviepy.video.compositing.concatenate import concatenate_videoclips
+from moviepy.editor import ImageClip, concatenate_videoclips
 from ftplib import FTP
 
 # --- CONFIGURAZIONE ---
@@ -64,7 +63,7 @@ def crea_video(parola, trad, nota_es_wrapped, base_file, out_video):
     clips.append(get_frame(parola, trad, nota_es_wrapped, 5))
 
     video = concatenate_videoclips(clips, method="compose")
-    video.write_videofile(out_video, fps=24, codec="libx264", audio=False)
+    video.write_videofile(out_video, fps=24, codec="libx264", audio=False, logger=None)
 
 # --- FUNZIONI TELEGRAM & AUDIO ---
 def send_telegram(chat_id, text, voice_path, token):
