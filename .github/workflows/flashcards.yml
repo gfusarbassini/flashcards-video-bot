@@ -1,20 +1,21 @@
 name: Run flashcards script
 
 on:
-  workflow_dispatch:
+  repository_dispatch:
+    types: [trigger-cron]
+  workflow_dispatch:       
 
 permissions:
   contents: write
 
 env:
   ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
-  # Recuperiamo il testo da Telegram e lo passiamo come variabile d'ambiente
-  TELEGRAM_TEXT: ${{ github.event.client_payload.telegram_text }}
+  TELEGRAM_TEXT: ${{ github.event.client_payload.data }}
 
 jobs:
   run-script:
     runs-on: ubuntu-latest
-
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
