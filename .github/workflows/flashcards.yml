@@ -2,7 +2,6 @@ name: Run flashcards script
 
 on:
   repository_dispatch:
-    types: [trigger-cron]
   workflow_dispatch:       
 
 permissions:
@@ -10,7 +9,6 @@ permissions:
 
 env:
   ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
-  TELEGRAM_TEXT: ${{ github.event.client_payload.data }}
 
 jobs:
   run-script:
@@ -35,6 +33,6 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add russo_parole.csv stato_pubblicazione.csv last_reset.txt || echo "No files to add"
+          git add parole.csv stato_pubblicazione.csv last_reset.txt || echo "No files to add"
           git commit -m "Update flashcards data (Trigger: ${{ github.event.client_payload.source || 'Manual' }})" || echo "No changes to commit"
           git push
