@@ -82,7 +82,7 @@ def generate_csv_record(input_word):
     # PROMPT AGGIORNATO: Spiegazione in Russo A1+
     prompt = (
         f"Analizza: '{input_word}'. Se è in italiano traduci in russo, altrimenti mantieni. "
-        "Rispondi SOLO con una riga CSV rigorosa (6 campi); i campi devono essere nella maniera più assoluta separati da "," e non da ";": "
+        "Rispondi SOLO con una riga CSV rigorosa (6 campi); i campi devono essere nella maniera più assoluta separati da ',' e non da ';': "
         "1.Parola(RU), 2.Traduzione(IT), 3.Spiegazione(SOLO IN RUSSO SEMPLICE LIVELLO A1+), 4.Nota, 5.Esempio(RU-IT), 6.Video(lascia vuoto)."
     )
     response = client.models.generate_content(model='gemini-3-flash-preview', contents=prompt)
