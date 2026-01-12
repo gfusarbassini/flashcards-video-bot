@@ -23,30 +23,34 @@ jobs:
         -v ${{ github.workspace }}:/github/workspace
 
     steps:
+      # ───────── Checkout repo ─────────
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # fondamentale per rebase/push
+          fetch-depth: 0
 
-      - name: Estrai Dati Input
+      # ───────── Estrai dati input ─────────
+      - name: Extract Input
         id: get_data
         run: |
           if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            echo "word=${{ github.event.client_payload.parola_russo }}" >> $GITHUB_OUTPUT
-            echo "chat_id=${{ github.event.client_payload.chat_id }}" >> $GITHUB_OUTPUT
+            echo "WORD=${{ github.event.client_payload.parola_russo }}" >> $GITHUB_ENV
+            echo "CHAT_ID=${{ github.event.client_payload.chat_id }}" >> $GITHUB_ENV
           else
-            echo "word=${{ github.event.inputs.parola_russo }}" >> $GITHUB_OUTPUT
-            echo "chat_id=" >> $GITHUB_OUTPUT
+            echo "WORD=${{ github.event.inputs.parola_russo }}" >> $GITHUB_ENV
+            echo "CHAT_ID=" >> $GITHUB_ENV
           fi
 
+      # ───────── Esegui script Python nel container ─────────
       - name: Run Main Script
         working-directory: /github/workspace
-        run: python3 append_word.py "${{ steps.get_data.outputs.word }}" "${{ steps.get_data.outputs.chat_id }}"
+        run: python3 append_word.py "$WORD" "$CHAT_ID"
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
 
+      # ───────── Commit & Push ─────────
       - name: Commit & Push Changes
         working-directory: /github/workspace
         run: |
@@ -54,10 +58,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           git add parole.csv
-          git commit -m "Aggiunta parola e video per: ${{ steps.get_data.outputs.word }}" || exit 0
+          git commit -m "Aggiunta parola e video per: $WORD" || exit 0
 
-          # allinea il branch remoto
           git pull --rebase origin main
-
-          # push sicuro
           git push origin HEAD:main
