@@ -1,35 +1,56 @@
-# Base Python
-FROM python:3.12-slim
+# ─────────────────────────────────────────────
+# Base image (NO slim → apt stabile)
+# ─────────────────────────────────────────────
+FROM python:3.12-bookworm
 
-# ── System dependencies
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# ─────────────────────────────────────────────
+# System dependencies
+# ─────────────────────────────────────────────
 RUN apt-get update && apt-get install -y \
     ffmpeg \
+    imagemagick \
     libcairo2 \
     libpango-1.0-0 \
     libpangocairo-1.0-0 \
     libgdk-pixbuf2.0-0 \
     libffi-dev \
-    imagemagick \
     wget \
+    fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
-# ── Fix ImageMagick policy
-RUN sed -i 's/domain="coder" rights="none"/domain="coder" rights="read|write"/' \
-    /etc/ImageMagick-6/policy.xml || true
+# ─────────────────────────────────────────────
+# Fix ImageMagick security policy
+# (necessario per LABEL / PDF ecc.)
+# ─────────────────────────────────────────────
+RUN if [ -f /etc/ImageMagick-6/policy.xml ]; then \
+      sed -i 's/domain="coder" rights="none"/domain="coder" rights="read|write"/' \
+      /etc/ImageMagick-6/policy.xml ; \
+    fi
 
-# ── Python dependencies
-COPY requirements.wordbot.txt /tmp/
-RUN pip install --no-cache-dir -r /tmp/requirements.wordbot.txt
-
-# ── Font
-RUN mkdir -p /usr/share/fonts/truetype/unbounded \
-    && wget -O /usr/share/fonts/truetype/unbounded/Unbounded.ttf \
-       "https://github.com/google/fonts/raw/main/ofl/unbounded/Unbounded%5Bwght%5D.ttf" \
-    && fc-cache -f
-
-# ── Workdir
+# ─────────────────────────────────────────────
+# Python dependencies
+# (layer separato → cache efficace)
+# ─────────────────────────────────────────────
 WORKDIR /app
+COPY requirements.wordbot.txt .
+RUN pip install --no-cache-dir -r requirements.wordbot.txt
+
+# ─────────────────────────────────────────────
+# Fonts
+# ─────────────────────────────────────────────
+RUN mkdir -p /usr/share/fonts/truetype/unbounded \
+ && wget -q -O /usr/share/fonts/truetype/unbounded/Unbounded.ttf \
+    https://github.com/google/fonts/raw/main/ofl/unbounded/Unbounded%5Bwght%5D.ttf \
+ && fc-cache -f -v
+
+# ─────────────────────────────────────────────
+# App code
+# ─────────────────────────────────────────────
 COPY . .
 
-# Default command (non obbligatorio)
+# Default command (facoltativo)
 CMD ["python3", "append_word.py"]
