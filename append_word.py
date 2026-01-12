@@ -9,7 +9,7 @@ from gtts import gTTS
 from pydub import AudioSegment
 from moviepy.editor import ImageClip, concatenate_videoclips
 from ftplib import FTP
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 import time
 import numpy as np
 from PIL import Image
@@ -53,6 +53,13 @@ def wrap_text(text, width=36):
         tspans.append(f'<tspan x="118.18359" dy="{dy}">{l}</tspan>')
     return "".join(tspans)
 
+# Funzione globale per ProcessPoolExecutor
+def svg_to_array(svg_content):
+    """Converti SVG direttamente in numpy array (più veloce di salvare su disco)"""
+    png_data = cairosvg.svg2png(bytestring=svg_content.encode("utf-8"))
+    img = Image.open(io.BytesIO(png_data))
+    return np.array(img)
+
 @timeit
 def crea_video_ultra_fast(parola, trad, nota_es_wrapped, base_file, out_video):
     """VERSIONE ULTRA-OTTIMIZZATA: carica SVG una volta, genera frame in-memory"""
@@ -70,12 +77,6 @@ def crea_video_ultra_fast(parola, trad, nota_es_wrapped, base_file, out_video):
         (parola, trad, nota_es_wrapped, 5)
     ]
     
-    def svg_to_array(svg_content):
-        """Converti SVG direttamente in numpy array (più veloce di salvare su disco)"""
-        png_data = cairosvg.svg2png(bytestring=svg_content.encode("utf-8"))
-        img = Image.open(io.BytesIO(png_data))
-        return np.array(img)
-    
     # PARALLELIZZA la generazione degli array numpy
     clips = []
     svgs = []
@@ -85,8 +86,8 @@ def crea_video_ultra_fast(parola, trad, nota_es_wrapped, base_file, out_video):
         svg = svg.replace("NOTAESEMPIO", n)
         svgs.append((svg, dur))
     
-    # Usa ProcessPoolExecutor per vero parallelismo (bypassa GIL)
-    with ProcessPoolExecutor(max_workers=4) as executor:
+    # Usa ThreadPoolExecutor (più semplice, evita problemi di pickling)
+    with ThreadPoolExecutor(max_workers=4) as executor:
         arrays = list(executor.map(svg_to_array, [s[0] for s in svgs]))
     
     for arr, (_, dur) in zip(arrays, svgs):
