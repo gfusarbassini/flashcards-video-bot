@@ -1,44 +1,39 @@
-# Base Python stabile
-FROM python:3.12-bookworm
+FROM python:3.11-slim
 
-ENV DEBIAN_FRONTEND=noninteractive
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
-# ── System dependencies (layer separato per caching)
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Installa dipendenze di sistema
+RUN apt-get update && apt-get install -y \
     ffmpeg \
-    imagemagick \
-    libcairo2 \
-    libpango-1.0-0 \
-    libpangocairo-1.0-0 \
-    libgdk-pixbuf2.0-0 \
-    libffi-dev \
-    wget \
-    fonts-dejavu-core \
+    libcairo2-dev \
+    libgirepository1.0-dev \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
-# ── Fix ImageMagick policy
-RUN if [ -f /etc/ImageMagick-6/policy.xml ]; then \
-      sed -i 's/domain="coder" rights="none"/domain="coder" rights="read|write"/' /etc/ImageMagick-6/policy.xml ; \
-    fi
+# Copia e installa requirements
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# ── Font custom
-RUN mkdir -p /usr/share/fonts/truetype/unbounded \
- && wget -q -O /usr/share/fonts/truetype/unbounded/Unbounded.ttf \
-    https://github.com/google/fonts/raw/main/ofl/unbounded/Unbounded%5Bwght%5D.ttf \
- && fc-cache -f -v
+# PRE-WARM: Importa tutte le librerie pesanti al build time
+# Questo crea il bytecode cache e velocizza gli import successivi
+RUN python -c "
+import pandas
+import requests
+import cairosvg
+from google import genai
+from gtts import gTTS
+from pydub import AudioSegment
+from moviepy.editor import ImageClip, concatenate_videoclips
+import numpy as np
+from PIL import Image
+from concurrent.futures import ThreadPoolExecutor
+print('✅ Tutte le librerie pre-caricate')
+"
 
-# ── Workdir e requirements
-WORKDIR /app
-COPY requirements.wordbot.txt .
+# Copia il codice
+COPY . /workspace
+WORKDIR /workspace
 
-# ── Install Python dependencies (cache layer)
-RUN pip install --upgrade pip \
- && pip install --no-cache-dir -r requirements.wordbot.txt
+# Pre-crea le directory necessarie
+RUN mkdir -p flashcards/ASSET
 
-# ── Copia il codice
-COPY . .
-
-# Default CMD (utile per test locali)
-CMD ["python3", "append_word.py"]
+# Entrypoint per esecuzione diretta
+ENTRYPOINT ["python", "append_word.py"]
