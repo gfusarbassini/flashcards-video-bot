@@ -19,11 +19,14 @@ jobs:
 
     container:
       image: ghcr.io/${{ github.repository }}/wordbot:latest
+      options: >-
+        -v ${{ github.workspace }}:/github/workspace
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0   # fondamentale per rebase/push
 
       - name: Estrai Dati Input
         id: get_data
@@ -37,18 +40,24 @@ jobs:
           fi
 
       - name: Run Main Script
-        run: python append_word.py "${{ steps.get_data.outputs.word }}" "${{ steps.get_data.outputs.chat_id }}"
+        working-directory: /github/workspace
+        run: python3 append_word.py "${{ steps.get_data.outputs.word }}" "${{ steps.get_data.outputs.chat_id }}"
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
 
       - name: Commit & Push Changes
-        working-directory: ${{ github.workspace }}
+        working-directory: /github/workspace
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
           git add parole.csv
           git commit -m "Aggiunta parola e video per: ${{ steps.get_data.outputs.word }}" || exit 0
+
+          # allinea il branch remoto
           git pull --rebase origin main
+
+          # push sicuro
           git push origin HEAD:main
