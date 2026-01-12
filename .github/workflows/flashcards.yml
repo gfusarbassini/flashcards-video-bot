@@ -2,6 +2,7 @@ name: Run flashcards script
 
 on:
   repository_dispatch:
+      types: [run_flashcards]
   workflow_dispatch:       
 
 permissions:
