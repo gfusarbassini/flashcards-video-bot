@@ -31,9 +31,10 @@ jobs:
           echo "CHAT_ID=${{ github.event.inputs.chat_id || github.event.client_payload.chat_id }}" >> $GITHUB_ENV
 
       # ─── Run Python in prebuilt Docker image ───
-      - name: Run Python in Docker
+      - name: Run Python in Docker with timing
         run: |
-          docker run --rm \
+          echo "=== START CONTAINER ==="
+          time docker run --rm \
             -v ${{ github.workspace }}:/app \
             -w /app \
             -e WORD="$WORD" \
@@ -42,7 +43,8 @@ jobs:
             -e TELEGRAM_TOKEN="${{ secrets.TELEGRAM_TOKEN }}" \
             -e FTP_PASSWORD="${{ secrets.FTP_PASSWORD }}" \
             ghcr.io/${{ github.repository }}/wordbot:latest \
-            python append_word.py "$WORD" "$CHAT_ID"
+            /bin/bash -c "echo '=== START PYTHON ==='; time python append_word.py \"$WORD\" \"$CHAT_ID\"; echo '=== END PYTHON ==='"
+          echo "=== END CONTAINER ==="
 
       # ─── Commit & Push Changes (fuori dal container) ───
       - name: Commit & Push Changes
