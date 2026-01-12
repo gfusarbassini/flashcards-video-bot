@@ -1,12 +1,11 @@
-# ────────────── Base Python stabile ──────────────
+# Base Python stabile
 FROM python:3.12-bookworm
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# ────────────── System dependencies con cache ──────────────
-# aggiorniamo apt solo se necessario
+# ── System dependencies (layer separato per caching)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     imagemagick \
@@ -19,27 +18,27 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
-# ────────────── Fix ImageMagick security policy ──────────────
+# ── Fix ImageMagick policy
 RUN if [ -f /etc/ImageMagick-6/policy.xml ]; then \
       sed -i 's/domain="coder" rights="none"/domain="coder" rights="read|write"/' /etc/ImageMagick-6/policy.xml ; \
     fi
 
-# ────────────── Font custom (Unbounded) ──────────────
+# ── Font custom
 RUN mkdir -p /usr/share/fonts/truetype/unbounded \
  && wget -q -O /usr/share/fonts/truetype/unbounded/Unbounded.ttf \
     https://github.com/google/fonts/raw/main/ofl/unbounded/Unbounded%5Bwght%5D.ttf \
  && fc-cache -f -v
 
-# ────────────── Workdir e copy requirements separato ──────────────
+# ── Workdir e requirements
 WORKDIR /app
 COPY requirements.wordbot.txt .
 
-# ────────────── Install Python dependencies con cache pip ──────────────
+# ── Install Python dependencies (cache layer)
 RUN pip install --upgrade pip \
  && pip install --no-cache-dir -r requirements.wordbot.txt
 
-# ────────────── Copia tutto il resto del codice ──────────────
+# ── Copia il codice
 COPY . .
 
-# Default command
+# Default CMD (utile per test locali)
 CMD ["python3", "append_word.py"]
