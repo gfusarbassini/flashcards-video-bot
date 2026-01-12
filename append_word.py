@@ -182,32 +182,38 @@ if __name__ == "__main__":
     parola_ru = str(new_row['Parola'].iloc[0])
     trad_it = str(new_row['Traduzione'].iloc[0])
 
-    # 3. Audio + Video in PARALLELO
+    # 3. TUTTO IN PARALLELO (Audio, Video, FTP prep)
     video_local_path = os.path.join(ASSET_DIR, video_filename)
     nota_wrap = wrap_text(f"{new_row['Nota'].iloc[0]} {new_row['Esempio'].iloc[0]}")
     
-    with ThreadPoolExecutor(max_workers=2) as executor:
+    # Salva CSV subito (non dipende da nulla)
+    pd.concat([df_old, new_row], ignore_index=True).to_csv(CSV_FILE, index=False)
+    print(f"✅ CSV salvato")
+    
+    with ThreadPoolExecutor(max_workers=3) as executor:
         audio_future = executor.submit(genera_audio, parola_ru, "voice.ogg")
         video_future = executor.submit(crea_video_ultra_fast, parola_ru, trad_it, 
                                       nota_wrap, os.path.join(BASI_DIR, "base_frame3.svg"), 
                                       video_local_path)
+        
+        # Aspetta solo l'audio per Telegram (non bloccare su video)
         audio_future.result()
+        
+        # 4. Telegram in parallelo con video encoding
+        if chat_id and bot_token:
+            msg = f"🇷🇺 *{parola_ru}*\n🇮🇹 {trad_it}\n\n📖 {new_row['Spiegazione'].iloc[0]}\n💬 {new_row['Esempio'].iloc[0]}"
+            telegram_future = executor.submit(send_telegram, chat_id, msg, "voice.ogg", bot_token)
+        
+        # Aspetta video prima di FTP
         video_future.result()
-    
-    # 4. Telegram
-    if chat_id and bot_token:
-        msg = f"🇷🇺 *{parola_ru}*\n🇮🇹 {trad_it}\n\n📖 {new_row['Spiegazione'].iloc[0]}\n💬 {new_row['Esempio'].iloc[0]}"
-        send_telegram(chat_id, msg, "voice.ogg", bot_token)
-
-    # 5. FTP asincrono
-    executor = ThreadPoolExecutor(max_workers=1)
-    ftp_future = executor.submit(upload_to_ftp, video_local_path, video_filename)
-    
-    # 6. Salva CSV
-    pd.concat([df_old, new_row], ignore_index=True).to_csv(CSV_FILE, index=False)
-    
-    ftp_future.result()
-    executor.shutdown()
+        
+        # 5. FTP in parallelo con Telegram
+        ftp_future = executor.submit(upload_to_ftp, video_local_path, video_filename)
+        
+        # Aspetta tutto
+        if chat_id and bot_token:
+            telegram_future.result()
+        ftp_future.result()
     
     print(f"\n🏁 TEMPO TOTALE: {time.time()-total_start:.2f}s")
     print(f"✅ Completato: {video_filename} per {parola_ru}")
