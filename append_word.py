@@ -3,16 +3,16 @@ import sys
 import os
 import io
 import requests
-import tempfile
 import cairosvg
 from google import genai
 from gtts import gTTS
 from pydub import AudioSegment
 from moviepy.editor import ImageClip, concatenate_videoclips
 from ftplib import FTP
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from functools import lru_cache
-import multiprocessing as mp
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+import time
+import numpy as np
+from PIL import Image
 
 # --- CONFIGURAZIONE ---
 CSV_FILE = "parole.csv"
@@ -25,11 +25,14 @@ FTP_USER = "roadtominds"
 FTP_PASS = os.getenv("FTP_PASSWORD")
 FTP_DIR = "Flashcards"
 
-@lru_cache(maxsize=1)
-def load_svg_template():
-    """Cache SVG template - carica una sola volta"""
-    with open(os.path.join(BASI_DIR, "base_frame3.svg"), "r", encoding="utf-8") as f:
-        return f.read()
+# PROFILING DECORATOR
+def timeit(func):
+    def wrapper(*args, **kwargs):
+        start = time.time()
+        result = func(*args, **kwargs)
+        print(f"⏱️  {func.__name__}: {time.time()-start:.2f}s")
+        return result
+    return wrapper
 
 def wrap_text(text, width=36):
     words = text.split()
@@ -50,70 +53,64 @@ def wrap_text(text, width=36):
         tspans.append(f'<tspan x="118.18359" dy="{dy}">{l}</tspan>')
     return "".join(tspans)
 
-def generate_frame_png(args):
-    """Genera un singolo frame PNG (parallelizzabile)"""
-    svg_content, idx = args
-    tmp_path = f"frame_{idx}.png"
-    cairosvg.svg2png(bytestring=svg_content.encode("utf-8"), write_to=tmp_path)
-    return tmp_path, idx
-
-def crea_video(parola, trad, nota_es_wrapped, out_video):
-    """Versione parallelizzata della generazione video"""
-    svg_template = load_svg_template()
+@timeit
+def crea_video_ultra_fast(parola, trad, nota_es_wrapped, base_file, out_video):
+    """VERSIONE ULTRA-OTTIMIZZATA: carica SVG una volta, genera frame in-memory"""
+    with open(base_file, "r", encoding="utf-8") as f:
+        svg_template = f.read()
     
-    # Prepara tutti i frame SVG (operazione veloce)
-    frames_data = []
-    frames_data.append((svg_template.replace("PAROLAPAROLAPAROLA", "")
-                                    .replace("TRADUZIONETRADUZIONETRADUZIONE", trad)
-                                    .replace("NOTAESEMPIO", ""), 0))
+    # Definisci i 7 frame
+    frame_configs = [
+        ("", trad, "", 1),
+        ("", trad, "5", 1),
+        ("", trad, "4", 1),
+        ("", trad, "3", 1),
+        ("", trad, "2", 1),
+        ("", trad, "1", 1),
+        (parola, trad, nota_es_wrapped, 5)
+    ]
     
-    for i, num in enumerate(range(5, 0, -1), 1):
-        frames_data.append((svg_template.replace("PAROLAPAROLAPAROLA", "")
-                                        .replace("TRADUZIONETRADUZIONETRADUZIONE", trad)
-                                        .replace("NOTAESEMPIO", str(num)), i))
+    def svg_to_array(svg_content):
+        """Converti SVG direttamente in numpy array (più veloce di salvare su disco)"""
+        png_data = cairosvg.svg2png(bytestring=svg_content.encode("utf-8"))
+        img = Image.open(io.BytesIO(png_data))
+        return np.array(img)
     
-    frames_data.append((svg_template.replace("PAROLAPAROLAPAROLA", parola)
-                                    .replace("TRADUZIONETRADUZIONETRADUZIONE", trad)
-                                    .replace("NOTAESEMPIO", nota_es_wrapped), 6))
-    
-    # PARALLELIZZA la conversione SVG→PNG (bottleneck principale)
-    frame_paths = [None] * 7
-    with ThreadPoolExecutor(max_workers=min(7, mp.cpu_count())) as executor:
-        futures = {executor.submit(generate_frame_png, frame): frame for frame in frames_data}
-        for future in as_completed(futures):
-            path, idx = future.result()
-            frame_paths[idx] = path
-    
-    # Crea clips con durate appropriate
+    # PARALLELIZZA la generazione degli array numpy
     clips = []
-    durations = [1, 1, 1, 1, 1, 1, 5]
-    for path, duration in zip(frame_paths, durations):
-        clips.append(ImageClip(path).set_duration(duration))
+    svgs = []
+    for p, t, n, dur in frame_configs:
+        svg = svg_template.replace("PAROLAPAROLAPAROLA", p)
+        svg = svg.replace("TRADUZIONETRADUZIONETRADUZIONE", t)
+        svg = svg.replace("NOTAESEMPIO", n)
+        svgs.append((svg, dur))
+    
+    # Usa ProcessPoolExecutor per vero parallelismo (bypassa GIL)
+    with ProcessPoolExecutor(max_workers=4) as executor:
+        arrays = list(executor.map(svg_to_array, [s[0] for s in svgs]))
+    
+    for arr, (_, dur) in zip(arrays, svgs):
+        clips.append(ImageClip(arr).set_duration(dur))
     
     video = concatenate_videoclips(clips, method="compose")
-    video.write_videofile(out_video, fps=24, codec="libx264", audio=False, logger=None, 
-                         threads=mp.cpu_count())  # Usa tutti i core per encoding
-    
-    # Cleanup
-    for path in frame_paths:
-        if os.path.exists(path):
-            os.remove(path)
+    video.write_videofile(out_video, fps=24, codec="libx264", audio=False, 
+                         logger=None, preset='ultrafast', threads=4)
 
+@timeit
 def send_telegram(chat_id, text, voice_path, token):
-    """Versione con session reusable (più veloce)"""
     with requests.Session() as session:
         base_url = f"https://api.telegram.org/bot{token}"
         session.post(f"{base_url}/sendMessage", 
-                    json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"})
+                    json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"},
+                    timeout=10)
         with open(voice_path, 'rb') as v:
             session.post(f"{base_url}/sendVoice", 
-                        data={'chat_id': chat_id}, files={'voice': v})
+                        data={'chat_id': chat_id}, files={'voice': v},
+                        timeout=10)
 
+@timeit
 def genera_audio(parola_russa, output_ogg):
-    """Ottimizzato: usa BytesIO invece di file temporaneo"""
     tts = gTTS(text=f"{parola_russa}... {parola_russa}... {parola_russa}", lang='ru')
-    
-    # Usa BytesIO invece di scrivere su disco
     mp3_buffer = io.BytesIO()
     tts.write_to_fp(mp3_buffer)
     mp3_buffer.seek(0)
@@ -123,6 +120,7 @@ def genera_audio(parola_russa, output_ogg):
                              overrides={'frame_rate': int(audio.frame_rate * 0.75)})
     rallentato.set_frame_rate(audio.frame_rate).export(output_ogg, format="ogg", codec="libopus")
 
+@timeit
 def generate_csv_record(input_word):
     client = genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
     prompt = (
@@ -133,18 +131,18 @@ def generate_csv_record(input_word):
     response = client.models.generate_content(model='gemini-3-flash-preview', contents=prompt)
     return response.text.strip().replace('```csv', '').replace('```', '').split('\n')[0]
 
+@timeit
 def upload_to_ftp(local_path, remote_filename):
-    """FTP upload separato per parallelizzazione"""
     try:
         ftp = FTP()
         ftp.encoding = "latin-1"
-        ftp.connect(FTP_HOST)
+        ftp.connect(FTP_HOST, timeout=30)
         ftp.login(FTP_USER, FTP_PASS)
         ftp.set_pasv(True)
         ftp.cwd(FTP_DIR)
         
         with open(local_path, "rb") as f:
-            ftp.storbinary(f"STOR {remote_filename}", f)
+            ftp.storbinary(f"STOR {remote_filename}", f, blocksize=8192)
         
         ftp.quit()
         print(f"✅ Caricato su FTP: {remote_filename}")
@@ -154,6 +152,8 @@ def upload_to_ftp(local_path, remote_filename):
         return False
 
 if __name__ == "__main__":
+    total_start = time.time()
+    
     if len(sys.argv) < 2: 
         sys.exit(1)
     
@@ -161,7 +161,7 @@ if __name__ == "__main__":
     chat_id = sys.argv[2] if len(sys.argv) > 2 else None
     bot_token = os.getenv("TELEGRAM_TOKEN")
 
-    # 1. Caricamento CSV (ottimizzato con usecols se necessario)
+    # 1. CSV
     cols = ['Parola', 'Traduzione', 'Spiegazione', 'Nota', 'Esempio', 'FileVideo']
     if os.path.exists(CSV_FILE):
         df_old = pd.read_csv(CSV_FILE)
@@ -172,7 +172,7 @@ if __name__ == "__main__":
 
     video_filename = f"{current_count:02d}_video.mp4"
 
-    # 2. Gemini API call
+    # 2. Gemini (probabilmente il vero bottleneck)
     line = generate_csv_record(input_word)
     new_row = pd.read_csv(io.StringIO(line), header=None, names=cols, 
                          quotechar='"', skipinitialspace=True).fillna('')
@@ -181,32 +181,32 @@ if __name__ == "__main__":
     parola_ru = str(new_row['Parola'].iloc[0])
     trad_it = str(new_row['Traduzione'].iloc[0])
 
-    # 3. PARALLELIZZA: Audio + Video generation
+    # 3. Audio + Video in PARALLELO
     video_local_path = os.path.join(ASSET_DIR, video_filename)
     nota_wrap = wrap_text(f"{new_row['Nota'].iloc[0]} {new_row['Esempio'].iloc[0]}")
     
     with ThreadPoolExecutor(max_workers=2) as executor:
-        # Audio e Video in parallelo (operazioni indipendenti)
         audio_future = executor.submit(genera_audio, parola_ru, "voice.ogg")
-        video_future = executor.submit(crea_video, parola_ru, trad_it, nota_wrap, video_local_path)
-        
-        # Attendi completamento
+        video_future = executor.submit(crea_video_ultra_fast, parola_ru, trad_it, 
+                                      nota_wrap, os.path.join(BASI_DIR, "base_frame3.svg"), 
+                                      video_local_path)
         audio_future.result()
         video_future.result()
     
-    # 4. Telegram (dopo audio)
+    # 4. Telegram
     if chat_id and bot_token:
         msg = f"🇷🇺 *{parola_ru}*\n🇮🇹 {trad_it}\n\n📖 {new_row['Spiegazione'].iloc[0]}\n💬 {new_row['Esempio'].iloc[0]}"
         send_telegram(chat_id, msg, "voice.ogg", bot_token)
 
-    # 5. FTP upload in background (non blocca il salvataggio CSV)
-    with ThreadPoolExecutor(max_workers=1) as executor:
-        ftp_future = executor.submit(upload_to_ftp, video_local_path, video_filename)
+    # 5. FTP asincrono
+    executor = ThreadPoolExecutor(max_workers=1)
+    ftp_future = executor.submit(upload_to_ftp, video_local_path, video_filename)
     
-    # 6. Salva CSV immediatamente (non aspettare FTP)
+    # 6. Salva CSV
     pd.concat([df_old, new_row], ignore_index=True).to_csv(CSV_FILE, index=False)
-    print(f"✅ CSV salvato: {video_filename} per {parola_ru}")
     
-    # Attendi FTP (opzionale, puoi rimuovere se vuoi terminare subito)
     ftp_future.result()
-    print(f"✅ Processo completo per {parola_ru}")
+    executor.shutdown()
+    
+    print(f"\n🏁 TEMPO TOTALE: {time.time()-total_start:.2f}s")
+    print(f"✅ Completato: {video_filename} per {parola_ru}")
