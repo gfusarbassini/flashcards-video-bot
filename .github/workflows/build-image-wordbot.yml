@@ -33,4 +33,4 @@ jobs:
           context: .
           file: Dockerfile.wordbot
           push: true
-          tags: ghcr.io/USER/REPO/wordbot:latest
+          tags: ghcr.io/${{ github.repository }}/wordbot:latest
