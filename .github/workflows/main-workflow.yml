@@ -63,7 +63,7 @@ jobs:
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
           echo "=== START PROCESSING ==="
-          time python append_word.py "$WORD" "$CHAT_ID"
+          python append_word.py "$WORD" "$CHAT_ID"
           echo "=== END PROCESSING ==="
       
       - name: Commit & Push Changes
