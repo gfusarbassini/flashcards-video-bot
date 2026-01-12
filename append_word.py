@@ -53,16 +53,16 @@ def wrap_text(text, width=36):
         tspans.append(f'<tspan x="118.18359" dy="{dy}">{l}</tspan>')
     return "".join(tspans)
 
-# Funzione globale per ProcessPoolExecutor
+# Funzione globale per generazione frame (versione ottimizzata sequenziale)
 def svg_to_array(svg_content):
-    """Converti SVG direttamente in numpy array (più veloce di salvare su disco)"""
+    """Converti SVG direttamente in numpy array"""
     png_data = cairosvg.svg2png(bytestring=svg_content.encode("utf-8"))
     img = Image.open(io.BytesIO(png_data))
     return np.array(img)
 
 @timeit
 def crea_video_ultra_fast(parola, trad, nota_es_wrapped, base_file, out_video):
-    """VERSIONE ULTRA-OTTIMIZZATA: carica SVG una volta, genera frame in-memory"""
+    """VERSIONE BILANCIATA: sequenziale per pochi frame, parallelo encoding"""
     with open(base_file, "r", encoding="utf-8") as f:
         svg_template = f.read()
     
@@ -77,25 +77,19 @@ def crea_video_ultra_fast(parola, trad, nota_es_wrapped, base_file, out_video):
         (parola, trad, nota_es_wrapped, 5)
     ]
     
-    # PARALLELIZZA la generazione degli array numpy
+    # Genera frame SEQUENZIALMENTE (più veloce per solo 7 frame)
     clips = []
-    svgs = []
     for p, t, n, dur in frame_configs:
         svg = svg_template.replace("PAROLAPAROLAPAROLA", p)
         svg = svg.replace("TRADUZIONETRADUZIONETRADUZIONE", t)
         svg = svg.replace("NOTAESEMPIO", n)
-        svgs.append((svg, dur))
-    
-    # Usa ThreadPoolExecutor (più semplice, evita problemi di pickling)
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        arrays = list(executor.map(svg_to_array, [s[0] for s in svgs]))
-    
-    for arr, (_, dur) in zip(arrays, svgs):
+        arr = svg_to_array(svg)
         clips.append(ImageClip(arr).set_duration(dur))
     
     video = concatenate_videoclips(clips, method="compose")
+    # Encoding con tutti i core disponibili + preset veloce
     video.write_videofile(out_video, fps=24, codec="libx264", audio=False, 
-                         logger=None, preset='ultrafast', threads=4)
+                         logger=None, preset='veryfast', threads=4)
 
 @timeit
 def send_telegram(chat_id, text, voice_path, token):
