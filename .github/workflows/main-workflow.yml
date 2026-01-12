@@ -44,7 +44,7 @@ jobs:
         run: |
           echo "=== START PROCESSING ==="
           # Usiamo il tempo di sistema per monitorare lo script
-          time python append_word.py "$WORD" "$CHAT_ID"
+          python append_word.py "$WORD" "$CHAT_ID"
           echo "=== END PROCESSING ==="
 
       - name: Commit & Push Changes
