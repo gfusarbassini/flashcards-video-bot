@@ -9,51 +9,57 @@ on:
         description: 'Parola da elaborare'
         required: true
         type: string
+      chat_id:
+        description: 'ID Chat Telegram'
+        required: false
+        type: string
 
 permissions:
   contents: write
+  packages: read
 
 jobs:
   process-word:
     runs-on: ubuntu-latest
+    # Il container viene avviato una sola volta all'inizio del job
+    container:
+      image: ghcr.io/${{ github.repository }}/wordbot:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
-      # ─── Checkout repo ───
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # ─── Set environment variables ───
-      - name: Set environment variables
+      - name: Elaborazione Video e Python
+        env:
+          WORD: ${{ github.event.inputs.parola_russo || github.event.client_payload.parola_russo }}
+          CHAT_ID: ${{ github.event.inputs.chat_id || github.event.client_payload.chat_id }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
-          echo "WORD=${{ github.event.inputs.parola_russo || github.event.client_payload.parola_russo }}" >> $GITHUB_ENV
-          echo "CHAT_ID=${{ github.event.inputs.chat_id || github.event.client_payload.chat_id }}" >> $GITHUB_ENV
+          echo "=== START PROCESSING ==="
+          # Usiamo il tempo di sistema per monitorare lo script
+          time python append_word.py "$WORD" "$CHAT_ID"
+          echo "=== END PROCESSING ==="
 
-      # ─── Run Python in prebuilt Docker image ───
-      - name: Run Python in Docker with timing
-        run: |
-          echo "=== START CONTAINER ==="
-          time docker run --rm \
-            -v ${{ github.workspace }}:/app \
-            -w /app \
-            -e WORD="$WORD" \
-            -e CHAT_ID="$CHAT_ID" \
-            -e GEMINI_API_KEY="${{ secrets.GEMINI_API_KEY }}" \
-            -e TELEGRAM_TOKEN="${{ secrets.TELEGRAM_TOKEN }}" \
-            -e FTP_PASSWORD="${{ secrets.FTP_PASSWORD }}" \
-            ghcr.io/${{ github.repository }}/wordbot:latest \
-            /bin/bash -c "echo '=== START PYTHON ==='; time python append_word.py \"$WORD\" \"$CHAT_ID\"; echo '=== END PYTHON ==='"
-          echo "=== END CONTAINER ==="
-
-      # ─── Commit & Push Changes (fuori dal container) ───
       - name: Commit & Push Changes
         run: |
+          # Indispensabile per evitare errori di permessi Git dentro il container
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+          # Aggiunge il file CSV modificato e i nuovi file generati
           git add parole.csv
-          git commit -m "Aggiunta parola e video per: $WORD" || exit 0
-
+          
+          # Se non ci sono modifiche (es. parola duplicata), non fallire
+          git commit -m "Aggiunta parola e video per: ${WORD:-dispatch}" || exit 0
+          
           git pull --rebase origin main
           git push origin HEAD:main
