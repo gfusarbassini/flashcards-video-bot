@@ -18,19 +18,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ───────── Checkout repo ─────────
+      # ─── Checkout repo ───
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # ───────── Set environment variables ─────────
+      # ─── Set environment variables ───
       - name: Set environment variables
         run: |
           echo "WORD=${{ github.event.inputs.parola_russo || github.event.client_payload.parola_russo }}" >> $GITHUB_ENV
           echo "CHAT_ID=${{ github.event.inputs.chat_id || github.event.client_payload.chat_id }}" >> $GITHUB_ENV
 
-      # ───────── Run Python inside Docker ─────────
+      # ─── Run Python in prebuilt Docker image ───
       - name: Run Python in Docker
         run: |
           docker run --rm \
@@ -44,7 +44,7 @@ jobs:
             ghcr.io/${{ github.repository }}/wordbot:latest \
             python append_word.py "$WORD" "$CHAT_ID"
 
-      # ───────── Commit & Push Changes ─────────
+      # ─── Commit & Push Changes (fuori dal container) ───
       - name: Commit & Push Changes
         run: |
           git config user.name "github-actions[bot]"
