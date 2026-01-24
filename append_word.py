@@ -151,18 +151,28 @@ def generate_csv_record(input_word):
         "Parola(RU), Traduzione(IT), Spiegazione(RU A1+), Nota, Esempio(RU-IT), Video(vuoto)."
     )
 
-    response = GEMINI_CLIENT.models.generate_content(
-        model="gemini-3-flash-preview",
-        contents=prompt,
-    )
+    try:
+        response = GEMINI_CLIENT.models.generate_content(
+            model="gemini-2.0-flash", # Recommended: use the latest stable flash model
+            contents=prompt,
+        )
+        
+        # Check if response and text exist
+        if not response or not response.text:
+            print(f"⚠️ Gemini returned an empty response for: {input_word}")
+            return None
 
-    return (
-        response.text.strip()
-        .replace("```csv", "")
-        .replace("```", "")
-        .split("\n")[0]
-    )
+        clean_text = (
+            response.text.strip()
+            .replace("```csv", "")
+            .replace("```", "")
+            .split("\n")[0]
+        )
+        return clean_text
 
+    except Exception as e:
+        print(f"❌ Error during Gemini generation: {e}")
+        return None
 # --- FTP ---
 @timeit
 def upload_to_ftp(local_path, remote_filename):
