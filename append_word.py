@@ -153,7 +153,7 @@ def generate_csv_record(input_word):
 
     try:
         response = GEMINI_CLIENT.models.generate_content(
-            model="gemini-2.0-flash", # Recommended: use the latest stable flash model
+            model="gemini-3-flash-preview",
             contents=prompt,
         )
         
