@@ -14,7 +14,7 @@ from ftplib import FTP
 from concurrent.futures import ThreadPoolExecutor
 from PIL import Image
 
-# Configurazione percorsi e credenziali
+# Configurazione directory e parametri FTP
 CSV_FILE = "parole.csv"
 BASI_DIR = "flashcards/BASI"
 ASSET_DIR = "flashcards/ASSET"
@@ -28,7 +28,7 @@ FTP_DIR = "Flashcards"
 GEMINI_CLIENT = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 def wrap_text(text, width=36):
-    """Spezza il testo in righe per l'inserimento nel file SVG."""
+    """Formatta il testo per l'inserimento negli elementi tspan dell'SVG."""
     words = text.split()
     lines, line = [], []
     char_count = 0
@@ -50,13 +50,13 @@ def wrap_text(text, width=36):
     return "".join(tspans)
 
 def svg_to_array(svg_content):
-    """Converte una stringa SVG in un array NumPy (RGBA) per MoviePy."""
+    """Converte SVG in array numpy passando per PNG in memoria."""
     png_data = cairosvg.svg2png(bytestring=svg_content.encode("utf-8"))
     img = Image.open(io.BytesIO(png_data))
     return np.array(img)
 
 def genera_audio(parola_russa, output_ogg):
-    """Genera file audio OGG in formato Opus, rallentato del 25%."""
+    """Genera audio sintetico, rallenta il bitrate e esporta in OGG Opus."""
     tts = gTTS(text=f"{parola_russa}... {parola_russa}... {parola_russa}", lang="ru")
     mp3_buffer = io.BytesIO()
     tts.write_to_fp(mp3_buffer)
@@ -67,8 +67,8 @@ def genera_audio(parola_russa, output_ogg):
 
 def generate_csv_record(input_word, chat_id, bot_token):
     """
-    Interroga Gemini per ottenere i dati della parola.
-    In caso di errore 503 (sovraccarico), notifica l'utente e riprova dopo 3 minuti.
+    Ottiene dati da Gemini. Se il modello è 503 (overloaded), 
+    notifica l'utente in russo e attende 3 minuti prima di riprovare.
     """
     prompt = (
         f"Analizza '{input_word}'. Se è italiano traduci in russo, altrimenti mantieni. "
@@ -90,14 +90,13 @@ def generate_csv_record(input_word, chat_id, bot_token):
                 if chat_id and bot_token:
                     requests.post(f"https://api.telegram.org/bot{bot_token}/sendMessage", 
                                   json={"chat_id": chat_id, "text": msg_error})
-                print("Server Gemini sovraccarico. Attesa di 180 secondi...")
                 time.sleep(180)
-            else:
-                print(f"Errore Gemini: {e}")
-                return None
+                continue
+            print(f"Errore Gemini critico: {e}")
+            return None
 
 def crea_video_ultra_fast(parola, trad, nota_es_wrapped, base_file, out_video):
-    """Crea un MP4 concatenando i frame SVG con encoding rapido."""
+    """Genera video MP4 assemblando frame statici derivati da template SVG."""
     with open(base_file, "r", encoding="utf-8") as f:
         svg_template = f.read()
 
@@ -105,31 +104,33 @@ def crea_video_ultra_fast(parola, trad, nota_es_wrapped, base_file, out_video):
                      ("", trad, "3", 1), ("", trad, "2", 1), ("", trad, "1", 1),
                      (parola, trad, nota_es_wrapped, 5)]
 
-    clips = [ImageClip(svg_to_array(svg_template.replace("PAROLAPAROLAPAROLA", p)
-                                    .replace("TRADUZIONETRADUZIONETRADUZIONE", t)
-                                    .replace("NOTAESEMPIO", n))).set_duration(dur)
-             for p, t, n, dur in frame_configs]
+    clips = []
+    for p, t, n, dur in frame_configs:
+        svg = svg_template.replace("PAROLAPAROLAPAROLA", p).replace("TRADUZIONETRADUZIONETRADUZIONE", t).replace("NOTAESEMPIO", n)
+        clips.append(ImageClip(svg_to_array(svg)).set_duration(dur))
 
     video = concatenate_videoclips(clips, method="compose")
-    video.write_videofile(out_video, fps=12, codec="libx264", audio=False, 
-                          preset="ultrafast", threads=4, logger=None)
+    video.write_videofile(out_video, fps=12, codec="libx264", audio=False, preset="ultrafast", threads=4, logger=None)
 
 def upload_to_ftp(local_path, remote_filename):
-    """Carica il video generato sul server FTP."""
+    """Gestione upload FTP con codifica latin-1 per compatibilità server."""
     try:
-        with FTP(FTP_HOST, FTP_USER, FTP_PASS, timeout=30) as ftp:
-            ftp.encoding = "latin-1"
-            ftp.set_pasv(True)
-            ftp.cwd(FTP_DIR)
-            with open(local_path, "rb") as f:
-                ftp.storbinary(f"STOR {remote_filename}", f, blocksize=32768)
+        ftp = FTP()
+        ftp.encoding = "latin-1"
+        ftp.connect(FTP_HOST, timeout=30)
+        ftp.login(FTP_USER, FTP_PASS)
+        ftp.set_pasv(True)
+        ftp.cwd(FTP_DIR)
+        with open(local_path, "rb") as f:
+            ftp.storbinary(f"STOR {remote_filename}", f, blocksize=32768)
+        ftp.quit()
         return True
     except Exception as e:
         print(f"Errore FTP: {e}")
         return False
 
 def send_telegram(chat_id, text, voice_path, token):
-    """Invia messaggio testuale e nota vocale tramite Bot API."""
+    """Invia il riepilogo testuale e il file vocale al bot Telegram."""
     base_url = f"https://api.telegram.org/bot{token}"
     requests.post(f"{base_url}/sendMessage", json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"})
     with open(voice_path, "rb") as v:
@@ -143,7 +144,6 @@ if __name__ == "__main__":
     chat_id = sys.argv[2] if len(sys.argv) > 2 else None
     bot_token = os.getenv("TELEGRAM_TOKEN")
 
-    # Gestione numerazione file e database CSV
     cols = ["Parola", "Traduzione", "Spiegazione", "Nota", "Esempio", "FileVideo"]
     if os.path.exists(CSV_FILE):
         df_old = pd.read_csv(CSV_FILE)
@@ -156,8 +156,7 @@ if __name__ == "__main__":
     line = generate_csv_record(input_word, chat_id, bot_token)
     
     if line:
-        new_row = pd.read_csv(io.StringIO(line), header=None, names=cols, 
-                              quotechar='"', skipinitialspace=True).fillna("")
+        new_row = pd.read_csv(io.StringIO(line), header=None, names=cols, quotechar='"', skipinitialspace=True).fillna("")
         new_row.at[0, "FileVideo"] = video_filename
         
         parola_ru = str(new_row["Parola"].iloc[0])
@@ -167,7 +166,6 @@ if __name__ == "__main__":
 
         pd.concat([df_old, new_row], ignore_index=True).to_csv(CSV_FILE, index=False)
 
-        # Esecuzione parallela di audio e video
         with ThreadPoolExecutor(max_workers=3) as executor:
             audio_f = executor.submit(genera_audio, parola_ru, "voice.ogg")
             video_f = executor.submit(crea_video_ultra_fast, parola_ru, trad_it, nota_wrap, 
