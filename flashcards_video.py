@@ -121,18 +121,23 @@ def publish_video(word_file):
 
         # Step 2: Check Status (Polling)
         while True:
-            status_resp = requests.get(f"{GRAPH_URL}/{creation_id}",
-                                     params={"fields": "status_code", "access_token": ACCESS_TOKEN})
+            # Chiediamo esplicitamente failure_reason
+            status_resp = requests.get(
+                f"{GRAPH_URL}/{creation_id}",
+                params={"fields": "status_code,failure_reason", "access_token": ACCESS_TOKEN}
+            )
             status_resp.raise_for_status()
-            status = status_resp.json().get("status_code")
+            res_data = status_resp.json()
+            status = res_data.get("status_code")
             
             if status == "FINISHED":
                 break
             elif status in ["ERROR", "EXPIRED"]:
-                print("Errore nel processing:", status_resp.json())
+                # Questo stamperà l'errore reale (es. "Video file is corrupted" o "URL unreachable")
+                print(f"❌ Errore API: {res_data.get('failure_reason', 'Motivo non specificato')}")
                 return False
             
-            time.sleep(5) 
+            time.sleep(5)
 
         # Step 3: Publish
         publish_resp = requests.post(
