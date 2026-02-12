@@ -15,7 +15,7 @@ GRAPH_URL = f"https://graph.facebook.com/{API_VERSION}"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CSV_FILE = os.path.join(BASE_DIR, "parole.csv")
 STATE_FILE = os.path.join(BASE_DIR, "stato_pubblicazione.csv")
-VIDEO_BASE_URL = "http://roadtominds.altervista.org/Flashcards/"
+VIDEO_BASE_URL = "https://roadtominds.altervista.org/Flashcards/"
 
 # --- GESTIONE DATI (Minimalista: solo lettura FileVideo) ---
 
