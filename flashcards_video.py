@@ -8,7 +8,7 @@ from datetime import date
 # --- CONFIGURAZIONE ---
 ACCESS_TOKEN = os.getenv("ACCESS_TOKEN") # Token di accesso per l'API di Instagram
 IG_USER_ID = "17841477441673896" # ID utente Instagram
-API_VERSION = "v23.0"
+API_VERSION = "v21.0"
 GRAPH_URL = f"https://graph.facebook.com/{API_VERSION}"
 
 # --- PERCORSI ASSOLUTI ---
