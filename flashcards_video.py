@@ -20,11 +20,19 @@ VIDEO_BASE_URL = "https://roadtominds.altervista.org/Flashcards/"
 # --- GESTIONE DATI (Minimalista: solo lettura FileVideo) ---
 
 def check_account():
+    # Step 1: who does this token belong to?
     resp = requests.get(
-        f"{GRAPH_URL}/{IG_USER_ID}",
-        params={"fields": "id,name,username,account_type", "access_token": ACCESS_TOKEN}
+        f"{GRAPH_URL}/me",
+        params={"fields": "id,name", "access_token": ACCESS_TOKEN}
     )
-    print("Account info:", resp.json())
+    print("ME:", resp.json())
+
+    # Step 2: what pages do I manage?
+    resp2 = requests.get(
+        f"{GRAPH_URL}/me/accounts",
+        params={"access_token": ACCESS_TOKEN}
+    )
+    print("PAGES:", resp2.json())
 
 def load_words():
     """
