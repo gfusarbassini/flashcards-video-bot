@@ -3,57 +3,55 @@ import csv
 import time
 import requests
 import os
-from datetime import date
 
-# --- CONFIGURAZIONE ---
-ACCESS_TOKEN = os.getenv("ACCESS_TOKEN") # Token di accesso per l'API di Instagram
-IG_USER_ID = "17841444282984648" # ID utente Instagram
+# --- CONFIGURATION ---
+ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")  # Instagram API access token
+IG_USER_ID = "17841444282984648"          # Instagram user ID
 API_VERSION = "v21.0"
 GRAPH_URL = f"https://graph.facebook.com/{API_VERSION}"
 
-# --- PERCORSI ASSOLUTI ---
+# --- ABSOLUTE PATHS ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CSV_FILE = os.path.join(BASE_DIR, "parole.csv")
 STATE_FILE = os.path.join(BASE_DIR, "stato_pubblicazione.csv")
 VIDEO_BASE_URL = "https://roadtominds.altervista.org/Flashcards/"
 
-# --- GESTIONE DATI (Minimalista: solo lettura FileVideo) ---
+
+# --- DATA LOADING ---
 
 def check_account():
-    # Step 1: who does this token belong to?
+    """Verifies token identity and associated pages."""
     resp = requests.get(
         f"{GRAPH_URL}/me",
         params={"fields": "id,name", "access_token": ACCESS_TOKEN}
     )
     print("ME:", resp.json())
 
-    # Step 2: what pages do I manage?
     resp2 = requests.get(
         f"{GRAPH_URL}/me/accounts",
         params={"access_token": ACCESS_TOKEN}
     )
     print("PAGES:", resp2.json())
 
+
 def load_words():
-    """
-    Carica le parole dal CSV. Mantiene tutti i campi per coerenza,
-    ma l'unica cosa usata sarà 'FileVideo'.
-    """
+    """Loads words from the CSV file. Only 'FileVideo' is used for publishing."""
     words = []
     if not os.path.exists(CSV_FILE):
-        print(f"ERRORE: File parole non trovato: {CSV_FILE}")
+        print(f"ERROR: Words file not found: {CSV_FILE}")
         return []
-        
+
     with open(CSV_FILE, newline='', encoding='utf-8') as f:
         reader = csv.DictReader(f)
         for row in reader:
             words.append(row)
     return words
 
-# --- GESTIONE STATO DI PUBBLICAZIONE (cycle, step) ---
+
+# --- PUBLICATION STATE MANAGEMENT (cycle, step) ---
 
 def load_state():
-    """Carica lo stato corrente (cycle e step) dal file CSV."""
+    """Loads the current publication state (cycle and step) from the state CSV."""
     if not os.path.exists(STATE_FILE):
         return {"cycle": 0, "step": 0}
     with open(STATE_FILE, newline='', encoding='utf-8') as f:
@@ -64,60 +62,63 @@ def load_state():
         except StopIteration:
             return {"cycle": 0, "step": 0}
 
+
 def save_state(state):
-    """Salva il nuovo stato (cycle e step) nel file CSV."""
+    """Saves the updated publication state (cycle and step) to the state CSV."""
     with open(STATE_FILE, 'w', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=['cycle', 'step'])
         writer.writeheader()
         writer.writerow(state)
 
-# --- CALCOLO INDICE DELLA PAROLA ---
+
+# --- WORD INDEX CALCULATION ---
 
 def calculate_word_index(cycle, step):
     """
-    Calcola l'indice 0-based della parola da selezionare nella lista
-    in base alla nuova logica, ignorando la lunghezza totale della lista.
-    
-    La formula è (cycle * 3) + 1 + offset_step.
-    Viene ritornato l'indice 0-based da usare per la lista Python.
+    Returns the 0-based index of the word to publish, based on the current
+    cycle and step using the following offset logic:
+
+        steps  0–2  → offset 1
+        steps  3–5  → offset 2
+        steps  6–9  → offset 3
+        step   10   → offset 4
+        step   11   → offset 5
+        step   12   → offset 6
+
+    Formula: word_index (1-based) = (cycle * 3) + offset
     """
-    # Calcolo dell'offset (base 1) come da tua specifica:
     if 0 <= step < 3:
-        offset_base_1 = 1
+        offset = 1
     elif 3 <= step < 6:
-        offset_base_1 = 2
-    elif 6 <= step < 9:
-        offset_base_1 = 3
-    elif step == 9: # Nello schema originale il passo 9 è incluso nella sezione 6-9
-        offset_base_1 = 3
+        offset = 2
+    elif 6 <= step <= 9:
+        offset = 3
     elif step == 10:
-        offset_base_1 = 4
+        offset = 4
     elif step == 11:
-        offset_base_1 = 5
+        offset = 5
     elif step == 12:
-        offset_base_1 = 6
+        offset = 6
     else:
-        # Questo caso non dovrebbe succedere se la logica di reset è corretta
-        offset_base_1 = 1
+        offset = 1  # Fallback — should not occur with correct reset logic
 
-    # Calcolo dell'indice 1-based teorico (per la parola numero X)
-    word_index_base_1 = (cycle * 3) + offset_base_1
-    
-    # Ritorna l'indice 0-based per la lista Python (Parola n.1 è indice 0)
-    return word_index_base_1 - 1 
+    return (cycle * 3) + offset - 1  # Convert to 0-based index
 
-# --- PUBBLICAZIONE INSTAGRAM (REALE) ---
+
+# --- INSTAGRAM PUBLISHING ---
 
 def publish_video(word_file):
     """
-    Tenta di pubblicare un video su Instagram usando l'API Graph.
+    Publishes a video to Instagram Stories via the Graph API.
+    Steps: create media container → poll until ready → publish.
+    Returns True on success, False on failure.
     """
     video_url = f"{VIDEO_BASE_URL}{word_file}"
     caption = f"Nuova Flashcard! Dettagli in: {video_url}"
-    print(f"Tentativo di pubblicazione con video URL: {video_url}")
-    
-    # Step 1: Create Container
+    print(f"Publishing video: {video_url}")
+
     try:
+        # Step 1: Create media container
         create_resp = requests.post(
             f"{GRAPH_URL}/{IG_USER_ID}/media",
             data={
@@ -127,136 +128,113 @@ def publish_video(word_file):
                 "access_token": ACCESS_TOKEN
             }
         )
-        create_resp.raise_for_status() 
+        create_resp.raise_for_status()
         creation_id = create_resp.json().get("id")
-        
+
         if not creation_id:
-            print("Errore creazione container:", create_resp.json())
+            print("Container creation error:", create_resp.json())
             return False
-        
-        # Step 2: Check Status (Polling)
-        # Step 2: Check Status (Polling)
+
+        # Step 2: Poll until container status is FINISHED
         max_attempts = 20
-        attempt = 0
-        
-        while attempt < max_attempts:
-            attempt += 1
-            print(f"🔄 Polling tentativo {attempt}...")
-            
+        for attempt in range(1, max_attempts + 1):
+            print(f"⏳ Polling attempt {attempt}/{max_attempts}...")
+
             status_resp = requests.get(
                 f"{GRAPH_URL}/{creation_id}",
                 params={"fields": "status_code,status", "access_token": ACCESS_TOKEN}
             )
-            
-            print(f"DEBUG raw response: {status_resp.status_code} - {status_resp.json()}")
-            
+
             if not status_resp.ok:
-                print(f"❌ Errore polling: {status_resp.json()}")
+                print(f"❌ Polling error: {status_resp.json()}")
                 return False
-            
+
             res_data = status_resp.json()
-            
-            # Prova entrambi i campi possibili
             status = res_data.get("status_code") or res_data.get("status")
-            print(f"DEBUG status: {status}")
-            
+
             if status == "FINISHED":
-                print("✅ Container pronto!")
+                print("✅ Container ready.")
                 break
             elif status in ["ERROR", "EXPIRED"]:
-                print(f"❌ Errore container: {res_data}")
+                print(f"❌ Container error: {res_data}")
                 return False
-            elif status in ["IN_PROGRESS", "PUBLISHED", None]:
-                print(f"⏳ In attesa... status={status}")
-                time.sleep(5)
             else:
-                print(f"⚠️ Status sconosciuto: {status} — aspetto...")
                 time.sleep(5)
-        
         else:
-            print("❌ Timeout: il container non è diventato FINISHED in tempo.")
+            print("❌ Timeout: container did not reach FINISHED status.")
             return False
 
-        # Step 3: Publish
+        # Step 3: Publish the container
         publish_resp = requests.post(
             f"{GRAPH_URL}/{IG_USER_ID}/media_publish",
             data={"creation_id": creation_id, "access_token": ACCESS_TOKEN}
         )
         publish_resp.raise_for_status()
-        print(f"✅ Pubblicato file {word_file}:", publish_resp.json())
+        print(f"✅ Published {word_file}:", publish_resp.json())
         return True
 
     except requests.exceptions.RequestException as e:
-        print(f"❌ Errore durante la pubblicazione: {e}")
+        print(f"❌ Request error: {e}")
         return False
     except Exception as e:
-        print(f"❌ Errore generico: {e}")
+        print(f"❌ Unexpected error: {e}")
         return False
 
-# --- FUNZIONE PRINCIPALE ---
+
+# --- MAIN ---
 
 def main():
     check_account()
-    # 1. Carica le parole e lo stato
+
+    # Load words and current state
     words = load_words()
     if not words:
-        print("Impossibile procedere senza parole caricate.")
+        print("Cannot proceed: no words loaded.")
         return
-        
+
     state = load_state()
     cycle = state["cycle"]
     step = state["step"]
-    
-    print(f"Stato Iniziale: Cycle={cycle}, Step={step}")
+    print(f"Current state — Cycle: {cycle}, Step: {step}")
 
-    # 2. Calcola l'indice 0-based da usare nella lista Python
+    # Determine which word to publish
     parola_index = calculate_word_index(cycle, step)
-    
+
     if parola_index < 0:
-        print("Errore di calcolo indice.")
+        print("Index calculation error.")
         return
-    
-    # 3. Verifica che l'indice esista nella lista delle parole
+
     list_len = len(words)
     if parola_index >= list_len:
-        print(f"⚠️ Indice calcolato ({parola_index}) fuori dai limiti della lista parole (lunghezza {list_len}).")
-        print("Questo significa che il ciclo è andato oltre il numero di parole disponibili.")
-        # Se l'indice è troppo grande, pubblichiamo l'ultima parola
-        parola_index = list_len - 1 
-        print(f"Usata l'ultima parola disponibile (Indice {parola_index}).")
-    
+        print(f"⚠️ Calculated index ({parola_index}) exceeds word list length ({list_len}). Using last word.")
+        parola_index = list_len - 1
+
     word_row = words[parola_index]
-    
-    # 4. Pubblica la parola
     word = word_row.get('Parola', 'N/A')
     file_video = word_row.get('FileVideo')
-    
-    print(f"✅ Pubblico parola: {word} (Indice calcolato: {parola_index})")
-    
-    if publish_video(file_video):
-        print(f"✅ Pubblicazione completata per la parola: {word}")
-        
-        # 5. Aggiorna lo stato
-        step += 1
-        
-        # Gestione del reset del ciclo (step = 12 nel tuo schema)
-        if step > 12: 
-            step = 0
-            cycle += 1 
-            print(f"🔁 Ciclo completato. Reset: Prossimo Cycle={cycle}, Prossimo Step={step}")
-        else:
-            print(f"➡️ Aggiornamento: Prossimo Cycle={cycle}, Prossimo Step={step}")
 
-        # 6. Salva il nuovo stato
+    print(f"Publishing word: {word} (index: {parola_index})")
+
+    if publish_video(file_video):
+        print(f"✅ Successfully published: {word}")
+
+        # Advance step, reset cycle if complete
+        step += 1
+        if step > 12:
+            step = 0
+            cycle += 1
+            print(f"🔁 Cycle complete. Next → Cycle: {cycle}, Step: {step}")
+        else:
+            print(f"➡️ Next → Cycle: {cycle}, Step: {step}")
+
         save_state({"cycle": cycle, "step": step})
     else:
-        print("❌ Pubblicazione fallita. Lo stato non viene aggiornato.")
+        print("❌ Publishing failed. State not updated.")
 
 
 if __name__ == "__main__":
-    # Controllo del token di accesso all'avvio
     if not ACCESS_TOKEN:
-        print("ERRORE: La variabile d'ambiente ACCESS_TOKEN non è impostata.")
+        print("ERROR: ACCESS_TOKEN environment variable is not set.")
         sys.exit(1)
-        
+
     main()
