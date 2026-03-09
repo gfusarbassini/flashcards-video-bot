@@ -133,15 +133,20 @@ def publish_video(word_file):
         if not creation_id:
             print("Errore creazione container:", create_resp.json())
             return False
-
+        
         # Step 2: Check Status (Polling)
         while True:
-            # Chiediamo esplicitamente failure_reason
             status_resp = requests.get(
                 f"{GRAPH_URL}/{creation_id}",
                 params={"fields": "status_code,failure_reason", "access_token": ACCESS_TOKEN}
             )
-            status_resp.raise_for_status()
+            
+            # AGGIUNGI QUESTO per vedere l'errore reale
+            if not status_resp.ok:
+                print(f"❌ Errore polling: {status_resp.status_code}")
+                print(f"❌ Dettaglio: {status_resp.json()}")
+                return False
+                
             res_data = status_resp.json()
             status = res_data.get("status_code")
             
