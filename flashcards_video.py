@@ -19,6 +19,13 @@ VIDEO_BASE_URL = "https://roadtominds.altervista.org/Flashcards/"
 
 # --- GESTIONE DATI (Minimalista: solo lettura FileVideo) ---
 
+def check_account():
+    resp = requests.get(
+        f"{GRAPH_URL}/{IG_USER_ID}",
+        params={"fields": "id,name,username,account_type", "access_token": ACCESS_TOKEN}
+    )
+    print("Account info:", resp.json())
+
 def load_words():
     """
     Carica le parole dal CSV. Mantiene tutti i campi per coerenza,
@@ -158,6 +165,7 @@ def publish_video(word_file):
 # --- FUNZIONE PRINCIPALE ---
 
 def main():
+    check_account()
     # 1. Carica le parole e lo stato
     words = load_words()
     if not words:
