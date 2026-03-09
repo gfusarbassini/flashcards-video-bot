@@ -135,29 +135,47 @@ def publish_video(word_file):
             return False
         
         # Step 2: Check Status (Polling)
-        while True:
+        # Step 2: Check Status (Polling)
+        max_attempts = 20
+        attempt = 0
+        
+        while attempt < max_attempts:
+            attempt += 1
+            print(f"🔄 Polling tentativo {attempt}...")
+            
             status_resp = requests.get(
                 f"{GRAPH_URL}/{creation_id}",
-                params={"fields": "status_code,failure_reason", "access_token": ACCESS_TOKEN}
+                params={"fields": "status_code,status", "access_token": ACCESS_TOKEN}
             )
             
-            # AGGIUNGI QUESTO per vedere l'errore reale
+            print(f"DEBUG raw response: {status_resp.status_code} - {status_resp.json()}")
+            
             if not status_resp.ok:
-                print(f"❌ Errore polling: {status_resp.status_code}")
-                print(f"❌ Dettaglio: {status_resp.json()}")
+                print(f"❌ Errore polling: {status_resp.json()}")
                 return False
-                
+            
             res_data = status_resp.json()
-            status = res_data.get("status_code")
+            
+            # Prova entrambi i campi possibili
+            status = res_data.get("status_code") or res_data.get("status")
+            print(f"DEBUG status: {status}")
             
             if status == "FINISHED":
+                print("✅ Container pronto!")
                 break
             elif status in ["ERROR", "EXPIRED"]:
-                # Questo stamperà l'errore reale (es. "Video file is corrupted" o "URL unreachable")
-                print(f"❌ Errore API: {res_data.get('failure_reason', 'Motivo non specificato')}")
+                print(f"❌ Errore container: {res_data}")
                 return False
-            
-            time.sleep(5)
+            elif status in ["IN_PROGRESS", "PUBLISHED", None]:
+                print(f"⏳ In attesa... status={status}")
+                time.sleep(5)
+            else:
+                print(f"⚠️ Status sconosciuto: {status} — aspetto...")
+                time.sleep(5)
+        
+        else:
+            print("❌ Timeout: il container non è diventato FINISHED in tempo.")
+            return False
 
         # Step 3: Publish
         publish_resp = requests.post(
