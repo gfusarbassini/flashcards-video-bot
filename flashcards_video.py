@@ -3,6 +3,7 @@ import csv
 import time
 import requests
 import os
+import subprocess
 
 # --- CONFIGURATION ---
 ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")  # Instagram API access token
@@ -107,17 +108,37 @@ def calculate_word_index(cycle, step):
 
 # --- INSTAGRAM PUBLISHING ---
 
+
+
+def preflight_check(video_url):
+    """Verify Meta can reach the video URL before even trying to upload."""
+    try:
+        resp = requests.head(video_url, timeout=10, allow_redirects=True)
+        content_type = resp.headers.get("Content-Type", "")
+        print(f"🔍 Preflight: status={resp.status_code}, Content-Type={content_type}")
+        if resp.status_code != 200:
+            print(f"❌ URL returned {resp.status_code} — Meta cannot fetch this file.")
+            return False
+        if "video" not in content_type and "octet-stream" not in content_type:
+            print(f"⚠️  Content-Type is '{content_type}' — Meta expects video/mp4")
+            return False
+        print("✅ URL is reachable and looks like a video.")
+        return True
+    except Exception as e:
+        print(f"❌ Preflight failed: {e}")
+        return False
+
+
 def publish_video(word_file):
-    """
-    Publishes a video to Instagram Stories via the Graph API.
-    Steps: create media container → poll until ready → publish.
-    Returns True on success, False on failure.
-    """
     video_url = f"{VIDEO_BASE_URL}{word_file}"
-    print(f"Publishing video: {video_url}")
+    print(f"\n--- Publishing: {video_url} ---")
+
+    # Preflight: check URL is reachable before hitting Meta
+    if not preflight_check(video_url):
+        return False
 
     try:
-        # Step 1: Create media container
+        # Step 1: Create container — log the FULL raw response
         create_resp = requests.post(
             f"{GRAPH_URL}/{IG_USER_ID}/media",
             data={
@@ -126,56 +147,55 @@ def publish_video(word_file):
                 "access_token": ACCESS_TOKEN
             }
         )
-        create_resp.raise_for_status()
-        creation_id = create_resp.json().get("id")
+        print(f"📦 Container response ({create_resp.status_code}): {create_resp.text}")
+        
+        create_data = create_resp.json()
+        creation_id = create_data.get("id")
 
         if not creation_id:
-            print("Container creation error:", create_resp.json())
+            print("❌ No container ID returned.")
             return False
 
-        # Step 2: Poll until container status is FINISHED
+        print(f"✅ Container ID: {creation_id}")
+
+        # Step 2: Poll — log EVERY response, not just errors
         max_attempts = 20
         for attempt in range(1, max_attempts + 1):
-            print(f"⏳ Polling attempt {attempt}/{max_attempts}...")
-
+            time.sleep(5)  # always wait first — container is never instant
+            
             status_resp = requests.get(
                 f"{GRAPH_URL}/{creation_id}",
                 params={"fields": "status_code,status", "access_token": ACCESS_TOKEN}
             )
-
-            if not status_resp.ok:
-                print(f"❌ Polling error: {status_resp.json()}")
-                return False
-
             res_data = status_resp.json()
-            status = res_data.get("status_code") or res_data.get("status")
+            status_code = res_data.get("status_code", "UNKNOWN")
+            status_msg  = res_data.get("status", "")
 
-            if status == "FINISHED":
+            print(f"⏳ Attempt {attempt}: status_code={status_code!r}, status={status_msg!r}")
+
+            if status_code == "FINISHED":
                 print("✅ Container ready.")
                 break
-            elif status in ["ERROR", "EXPIRED"]:
-                print(f"❌ Container error: {res_data}")
+            elif status_code in ("ERROR", "EXPIRED") or "ERROR" in str(status_msg).upper():
+                print(f"❌ Container failed — full response: {res_data}")
                 return False
-            else:
-                time.sleep(5)
+            # else IN_PROGRESS / PUBLISHED / empty — keep polling
+
         else:
-            print("❌ Timeout: container did not reach FINISHED status.")
+            print("❌ Timeout waiting for FINISHED.")
             return False
 
-        # Step 3: Publish the container
+        # Step 3: Publish
         publish_resp = requests.post(
             f"{GRAPH_URL}/{IG_USER_ID}/media_publish",
             data={"creation_id": creation_id, "access_token": ACCESS_TOKEN}
         )
+        print(f"📤 Publish response ({publish_resp.status_code}): {publish_resp.text}")
         publish_resp.raise_for_status()
-        print(f"✅ Published {word_file}:", publish_resp.json())
         return True
 
     except requests.exceptions.RequestException as e:
         print(f"❌ Request error: {e}")
-        return False
-    except Exception as e:
-        print(f"❌ Unexpected error: {e}")
         return False
 
 
