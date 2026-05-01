@@ -114,7 +114,6 @@ def publish_video(word_file):
     Returns True on success, False on failure.
     """
     video_url = f"{VIDEO_BASE_URL}{word_file}"
-    caption = f"Nuova Flashcard! Dettagli in: {video_url}"
     print(f"Publishing video: {video_url}")
 
     try:
@@ -124,7 +123,6 @@ def publish_video(word_file):
             data={
                 "media_type": "STORIES",
                 "video_url": video_url,
-                "caption": caption,
                 "access_token": ACCESS_TOKEN
             }
         )
