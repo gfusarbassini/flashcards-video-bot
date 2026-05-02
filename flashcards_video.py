@@ -3,11 +3,11 @@ import csv
 import time
 import requests
 import os
-import subprocess
 
 # --- CONFIGURATION ---
-ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")  # Instagram API access token
-IG_USER_ID = "17841444282984648"          # Instagram user ID
+ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")            # User token (Stories, polling, publish)
+PAGE_ACCESS_TOKEN = os.getenv("PAGE_ACCESS_TOKEN")  # Page token (Reels container creation)
+IG_USER_ID = "17841444282984648"
 API_VERSION = "v21.0"
 GRAPH_URL = f"https://graph.facebook.com/{API_VERSION}"
 
@@ -108,8 +108,6 @@ def calculate_word_index(cycle, step):
 
 # --- INSTAGRAM PUBLISHING ---
 
-
-
 def preflight_check(video_url):
     """Verify Meta can reach the video URL before even trying to upload."""
     try:
@@ -133,22 +131,22 @@ def publish_video(word_file):
     video_url = f"{VIDEO_BASE_URL}{word_file}"
     print(f"\n--- Publishing: {video_url} ---")
 
-    # Preflight: check URL is reachable before hitting Meta
     if not preflight_check(video_url):
         return False
 
     try:
-        # Step 1: Create container — log the FULL raw response
+        # Step 1: Create Reel container using Page Access Token
         create_resp = requests.post(
             f"{GRAPH_URL}/{IG_USER_ID}/media",
             data={
-                "media_type": "STORIES",
+                "media_type": "REELS",
                 "video_url": video_url,
-                "access_token": ACCESS_TOKEN
+                "caption": "",
+                "access_token": PAGE_ACCESS_TOKEN
             }
         )
         print(f"📦 Container response ({create_resp.status_code}): {create_resp.text}")
-        
+
         create_data = create_resp.json()
         creation_id = create_data.get("id")
 
@@ -158,14 +156,14 @@ def publish_video(word_file):
 
         print(f"✅ Container ID: {creation_id}")
 
-        # Step 2: Poll — log EVERY response, not just errors
+        # Step 2: Poll until FINISHED
         max_attempts = 20
         for attempt in range(1, max_attempts + 1):
-            time.sleep(5)  # always wait first — container is never instant
-            
+            time.sleep(5)
+
             status_resp = requests.get(
                 f"{GRAPH_URL}/{creation_id}",
-                params={"fields": "status_code,status", "access_token": ACCESS_TOKEN}
+                params={"fields": "status_code,status", "access_token": PAGE_ACCESS_TOKEN}
             )
             res_data = status_resp.json()
             status_code = res_data.get("status_code", "UNKNOWN")
@@ -179,7 +177,6 @@ def publish_video(word_file):
             elif status_code in ("ERROR", "EXPIRED") or "ERROR" in str(status_msg).upper():
                 print(f"❌ Container failed — full response: {res_data}")
                 return False
-            # else IN_PROGRESS / PUBLISHED / empty — keep polling
 
         else:
             print("❌ Timeout waiting for FINISHED.")
@@ -188,7 +185,7 @@ def publish_video(word_file):
         # Step 3: Publish
         publish_resp = requests.post(
             f"{GRAPH_URL}/{IG_USER_ID}/media_publish",
-            data={"creation_id": creation_id, "access_token": ACCESS_TOKEN}
+            data={"creation_id": creation_id, "access_token": PAGE_ACCESS_TOKEN}
         )
         print(f"📤 Publish response ({publish_resp.status_code}): {publish_resp.text}")
         publish_resp.raise_for_status()
@@ -204,7 +201,6 @@ def publish_video(word_file):
 def main():
     check_account()
 
-    # Load words and current state
     words = load_words()
     if not words:
         print("Cannot proceed: no words loaded.")
@@ -215,7 +211,6 @@ def main():
     step = state["step"]
     print(f"Current state — Cycle: {cycle}, Step: {step}")
 
-    # Determine which word to publish
     parola_index = calculate_word_index(cycle, step)
 
     if parola_index < 0:
@@ -236,7 +231,6 @@ def main():
     if publish_video(file_video):
         print(f"✅ Successfully published: {word}")
 
-        # Advance step, reset cycle if complete
         step += 1
         if step > 12:
             step = 0
@@ -253,6 +247,10 @@ def main():
 if __name__ == "__main__":
     if not ACCESS_TOKEN:
         print("ERROR: ACCESS_TOKEN environment variable is not set.")
+        sys.exit(1)
+
+    if not PAGE_ACCESS_TOKEN:
+        print("ERROR: PAGE_ACCESS_TOKEN environment variable is not set.")
         sys.exit(1)
 
     main()
