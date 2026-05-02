@@ -7,7 +7,8 @@ import os
 # --- CONFIGURATION ---
 ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")            # User token (Stories, polling, publish)
 PAGE_ACCESS_TOKEN = os.getenv("PAGE_ACCESS_TOKEN")  # Page token (Reels container creation)
-IG_USER_ID = "17841444282984648"
+IG_USER_ID = "17841444282984648"                    # Instagram Business Account ID
+FB_PAGE_ID = "741836139020105"                      # Facebook Page ID (per i Reels)
 API_VERSION = "v21.0"
 GRAPH_URL = f"https://graph.facebook.com/{API_VERSION}"
 
@@ -137,7 +138,7 @@ def publish_video(word_file):
     try:
         # Step 1: Create Reel container using Page Access Token
         create_resp = requests.post(
-            f"{GRAPH_URL}/{IG_USER_ID}/media",
+            f"{GRAPH_URL}/{FB_PAGE_ID}/media",
             data={
                 "media_type": "REELS",
                 "video_url": video_url,
