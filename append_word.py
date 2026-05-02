@@ -219,11 +219,14 @@ def publish_reel(video_filename, caption):
                 "access_token": ACCESS_TOKEN
             }
         )
-        create_resp.raise_for_status()
+        if not create_resp.ok:
+            print(f"❌ Errore creazione container ({create_resp.status_code}): {create_resp.text}")
+            return False
+
         creation_id = create_resp.json().get("id")
 
         if not creation_id:
-            print("❌ Errore creazione container:", create_resp.json())
+            print("❌ Nessun ID nel response:", create_resp.json())
             return False
 
         print(f"✅ Container ID: {creation_id}")
