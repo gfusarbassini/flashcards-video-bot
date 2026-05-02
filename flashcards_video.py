@@ -185,7 +185,7 @@ def publish_video(word_file):
 
         # Step 3: Publish
         publish_resp = requests.post(
-            f"{GRAPH_URL}/{IG_USER_ID}/media_publish",
+            f"{GRAPH_URL}/{FB_PAGE_ID}/media_publish",
             data={"creation_id": creation_id, "access_token": PAGE_ACCESS_TOKEN}
         )
         print(f"📤 Publish response ({publish_resp.status_code}): {publish_resp.text}")
