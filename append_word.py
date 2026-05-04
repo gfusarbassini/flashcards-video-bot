@@ -28,7 +28,9 @@ FTP_DIR = "Flashcards"
 
 # Instagram
 ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
+PAGE_ACCESS_TOKEN = os.getenv("PAGE_ACCESS_TOKEN")  # Page token per i Reels
 IG_USER_ID = "17841444282984648"
+FB_PAGE_ID = "741836139020105"
 API_VERSION = "v21.0"
 GRAPH_URL = f"https://graph.facebook.com/{API_VERSION}"
 VIDEO_BASE_URL = "https://roadtominds.altervista.org/Flashcards/"
@@ -119,7 +121,7 @@ def crea_video_ultra_fast(parola, trad, nota_es_wrapped, base_file, out_video):
     video = concatenate_videoclips(clips, method="compose")
     video.write_videofile(
         out_video,
-        fps=30,                      # minimo richiesto da Meta
+        fps=30,
         codec="libx264",
         audio=False,
         preset="ultrafast",
@@ -142,8 +144,6 @@ def genera_audio(parola_russa, output_ogg):
 
     audio = AudioSegment.from_file(mp3_buffer, format="mp3")
 
-    # Time-stretch: rallenta senza abbassare il pitch
-    # Usiamo rubberband via ffmpeg se disponibile, altrimenti fallback manuale
     try:
         import subprocess
         import tempfile
@@ -154,7 +154,6 @@ def genera_audio(parola_russa, output_ogg):
 
         tmp_out_path = tmp_in_path.replace(".mp3", "_slow.mp3")
 
-        # atempo=0.75 rallenta del 25% mantenendo il pitch
         result = subprocess.run([
             "ffmpeg", "-y", "-i", tmp_in_path,
             "-filter:a", "atempo=0.75",
@@ -170,10 +169,9 @@ def genera_audio(parola_russa, output_ogg):
         os.unlink(tmp_out_path)
 
     except Exception:
-        # Fallback: rallentamento con pitch correction manuale tramite resample
         original_rate = audio.frame_rate
         slowed = audio._spawn(audio.raw_data, overrides={"frame_rate": int(original_rate * 0.75)})
-        rallentato = slowed.set_frame_rate(original_rate)  # riporta il sample rate originale → corregge il pitch
+        rallentato = slowed.set_frame_rate(original_rate)
 
     rallentato.export(output_ogg, format="ogg", codec="libopus")
 
@@ -203,7 +201,9 @@ def upload_to_ftp(local_path, remote_filename):
 def publish_reel(video_filename, caption):
     """
     Pubblica il video come Reel su Instagram.
-    Steps: crea container → polling fino a FINISHED → pubblica.
+    - Crea container su FB_PAGE_ID con PAGE_ACCESS_TOKEN
+    - Polling con PAGE_ACCESS_TOKEN
+    - Pubblica su IG_USER_ID con PAGE_ACCESS_TOKEN
     """
     video_url = f"{VIDEO_BASE_URL}{video_filename}"
     print(f"📤 Pubblicazione Reel: {video_url}")
@@ -211,12 +211,12 @@ def publish_reel(video_filename, caption):
     try:
         # Step 1: crea container
         create_resp = requests.post(
-            f"{GRAPH_URL}/{IG_USER_ID}/media",
+            f"{GRAPH_URL}/{FB_PAGE_ID}/media",
             data={
                 "media_type": "REELS",
                 "video_url": video_url,
                 "caption": caption,
-                "access_token": ACCESS_TOKEN
+                "access_token": PAGE_ACCESS_TOKEN
             }
         )
         if not create_resp.ok:
@@ -224,7 +224,6 @@ def publish_reel(video_filename, caption):
             return False
 
         creation_id = create_resp.json().get("id")
-
         if not creation_id:
             print("❌ Nessun ID nel response:", create_resp.json())
             return False
@@ -237,7 +236,7 @@ def publish_reel(video_filename, caption):
             time.sleep(5)
             status_resp = requests.get(
                 f"{GRAPH_URL}/{creation_id}",
-                params={"fields": "status_code,status", "access_token": ACCESS_TOKEN}
+                params={"fields": "status_code,status", "access_token": PAGE_ACCESS_TOKEN}
             )
             res_data = status_resp.json()
             status_code = res_data.get("status_code", "UNKNOWN")
@@ -257,7 +256,7 @@ def publish_reel(video_filename, caption):
         # Step 3: pubblica
         publish_resp = requests.post(
             f"{GRAPH_URL}/{IG_USER_ID}/media_publish",
-            data={"creation_id": creation_id, "access_token": ACCESS_TOKEN}
+            data={"creation_id": creation_id, "access_token": PAGE_ACCESS_TOKEN}
         )
         publish_resp.raise_for_status()
         print(f"✅ Reel pubblicato:", publish_resp.json())
@@ -311,7 +310,6 @@ if __name__ == "__main__":
     chat_id = sys.argv[2] if len(sys.argv) > 2 else None
     bot_token = os.getenv("TELEGRAM_TOKEN")
 
-    # Imposta il timeout globale di 3 minuti
     signal.signal(signal.SIGALRM, timeout_handler)
     signal.alarm(TIMEOUT_SECONDS)
 
@@ -342,7 +340,7 @@ if __name__ == "__main__":
         video_local_path = os.path.join(ASSET_DIR, video_filename)
         nota_wrap = wrap_text(f"{new_row['Nota'].iloc[0]} {new_row['Esempio'].iloc[0]}")
 
-        # 1) Prima invia la risposta su Telegram, poi procede con la generazione
+        # 1) Prima invia la risposta su Telegram
         if chat_id and bot_token:
             msg = f"🇷🇺 *{parola_ru}*\n🇮🇹 {trad_it}\n\n📖 {spiegazione}\n💬 {esempio}"
             genera_audio(parola_ru, "voice.ogg")
@@ -365,11 +363,9 @@ if __name__ == "__main__":
         caption = f"🇷🇺 {parola_ru} = 🇮🇹 {trad_it}\n\n{spiegazione}\n\n#russo #flashcard #imparare"
         publish_reel(video_filename, caption)
 
-        # Disattiva il timeout se tutto è andato bene
         signal.alarm(0)
 
     except TimeoutError:
-        # 2) Notifica e killa l'action dopo 3 minuti
         if chat_id and bot_token:
             send_telegram_text(
                 chat_id,
