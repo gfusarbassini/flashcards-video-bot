@@ -201,7 +201,7 @@ def upload_to_ftp(local_path, remote_filename):
 def publish_reel(video_filename, caption):
     """
     Pubblica il video come Reel su Instagram.
-    - Crea container su FB_PAGE_ID con PAGE_ACCESS_TOKEN
+    - Crea container su IG_USER_ID con PAGE_ACCESS_TOKEN
     - Polling con PAGE_ACCESS_TOKEN
     - Pubblica su IG_USER_ID con PAGE_ACCESS_TOKEN
     """
@@ -209,9 +209,9 @@ def publish_reel(video_filename, caption):
     print(f"📤 Pubblicazione Reel: {video_url}")
 
     try:
-        # Step 1: crea container
+        # Step 1: crea container (Corretto: si usa IG_USER_ID, non FB_PAGE_ID)
         create_resp = requests.post(
-            f"{GRAPH_URL}/{FB_PAGE_ID}/media",
+            f"{GRAPH_URL}/{IG_USER_ID}/media",
             data={
                 "media_type": "REELS",
                 "video_url": video_url,
