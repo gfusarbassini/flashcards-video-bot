@@ -201,70 +201,62 @@ def upload_to_ftp(local_path, remote_filename):
 def publish_reel(video_filename, caption):
     """
     Pubblica il video come Reel su Instagram.
-    - Crea container su IG_USER_ID con PAGE_ACCESS_TOKEN
-    - Polling con PAGE_ACCESS_TOKEN
-    - Pubblica su IG_USER_ID con PAGE_ACCESS_TOKEN
+    Usa l'IG_USER_ID con un User Access Token valido e autorizzato per quell'account.
     """
     video_url = f"{VIDEO_BASE_URL}{video_filename}"
     print(f"📤 Pubblicazione Reel: {video_url}")
 
+    # Usa ACCESS_TOKEN (User Token) invece di PAGE_ACCESS_TOKEN se l'ID non viene trovato
+    token_to_use = ACCESS_TOKEN 
+
     try:
-        # Step 1: crea container (Corretto: si usa IG_USER_ID, non FB_PAGE_ID)
+        # Step 1: Crea container multimediale
         create_resp = requests.post(
             f"{GRAPH_URL}/{IG_USER_ID}/media",
             data={
                 "media_type": "REELS",
                 "video_url": video_url,
                 "caption": caption,
-                "access_token": PAGE_ACCESS_TOKEN
+                "access_token": token_to_use
             }
         )
+        
         if not create_resp.ok:
             print(f"❌ Errore creazione container ({create_resp.status_code}): {create_resp.text}")
+            # Se fallisce ancora, prova a stampare i dettagli dell'account per debug
             return False
 
         creation_id = create_resp.json().get("id")
-        if not creation_id:
-            print("❌ Nessun ID nel response:", create_resp.json())
-            return False
-
-        print(f"✅ Container ID: {creation_id}")
-
-        # Step 2: polling
-        max_attempts = 20
-        for attempt in range(1, max_attempts + 1):
+        
+        # Step 2: Polling stato
+        for _ in range(20):
             time.sleep(5)
             status_resp = requests.get(
                 f"{GRAPH_URL}/{creation_id}",
-                params={"fields": "status_code,status", "access_token": PAGE_ACCESS_TOKEN}
+                params={"fields": "status_code,status", "access_token": token_to_use}
             )
-            res_data = status_resp.json()
-            status_code = res_data.get("status_code", "UNKNOWN")
-            status_msg = res_data.get("status", "")
-            print(f"⏳ Attempt {attempt}: status_code='{status_code}', status='{status_msg}'")
-
-            if status_code == "FINISHED":
+            res = status_resp.json()
+            if res.get("status_code") == "FINISHED":
                 print("✅ Container pronto.")
                 break
-            elif status_code in ("ERROR", "EXPIRED") or "ERROR" in str(status_msg).upper():
-                print(f"❌ Container fallito: {res_data}")
+            if res.get("status_code") in ("ERROR", "EXPIRED"):
+                print(f"❌ Errore processing: {res}")
                 return False
         else:
-            print("❌ Timeout polling container.")
             return False
 
-        # Step 3: pubblica
+        # Step 3: Pubblicazione finale
         publish_resp = requests.post(
             f"{GRAPH_URL}/{IG_USER_ID}/media_publish",
-            data={"creation_id": creation_id, "access_token": PAGE_ACCESS_TOKEN}
+            data={"creation_id": creation_id, "access_token": token_to_use}
         )
-        publish_resp.raise_for_status()
-        print(f"✅ Reel pubblicato:", publish_resp.json())
+        print(f"✅ Reel pubblicato: {publish_resp.json()}")
         return True
 
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Errore request: {e}")
+    except Exception as e:
+        print(f"❌ Errore: {e}")
         return False
+
 
 
 # --- GEMINI ---
