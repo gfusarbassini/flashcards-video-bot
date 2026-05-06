@@ -60,6 +60,7 @@ jobs:
           CHAT_ID: ${{ github.event.inputs.chat_id || github.event.client_payload.chat_id }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          IG_PERSONAL_TOKEN: ${{ secrets.IG_PERSONAL_TOKEN }}
           FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
           echo "=== START PROCESSING ==="
