@@ -27,12 +27,9 @@ FTP_PASS = os.getenv("FTP_PASSWORD")
 FTP_DIR = "Flashcards"
 
 # Instagram
-ACCESS_TOKEN = os.getenv("ACCESS_TOKEN")
-PAGE_ACCESS_TOKEN = os.getenv("PAGE_ACCESS_TOKEN")  # Page token per i Reels
+IG_PERSONAL_TOKEN = os.getenv("IG_PERSONAL_TOKEN")
 IG_USER_ID = "17841444282984648"
-FB_PAGE_ID = "741836139020105"
-API_VERSION = "v21.0"
-GRAPH_URL = f"https://graph.facebook.com/{API_VERSION}"
+IG_GRAPH_URL = "https://graph.instagram.com/v23.0"
 VIDEO_BASE_URL = "https://roadtominds.altervista.org/Flashcards/"
 
 GEMINI_CLIENT = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
@@ -200,63 +197,89 @@ def upload_to_ftp(local_path, remote_filename):
 
 def publish_reel(video_filename, caption):
     """
-    Pubblica il video come Reel su Instagram.
-    Usa l'IG_USER_ID con un User Access Token valido e autorizzato per quell'account.
+    Pubblica il video come Reel su Instagram usando graph.instagram.com/v23.0
+    e il token personale IG_PERSONAL_TOKEN.
+
+    Step 1 — Crea il container (equivalente alla prima curl):
+        POST https://graph.instagram.com/v23.0/{IG_USER_ID}/media
+             ?video_url=...&media_type=REELS&caption=...&access_token=...
+
+    Step 2 — Polling fino a FINISHED
+
+    Step 3 — Pubblica (equivalente alla seconda curl):
+        POST https://graph.instagram.com/v23.0/{IG_USER_ID}/media_publish
+             body JSON: {"creation_id": "...", "access_token": "..."}
     """
     video_url = f"{VIDEO_BASE_URL}{video_filename}"
     print(f"📤 Pubblicazione Reel: {video_url}")
 
-    # Usa ACCESS_TOKEN (User Token) invece di PAGE_ACCESS_TOKEN se l'ID non viene trovato
-    token_to_use = ACCESS_TOKEN 
-
     try:
         # Step 1: Crea container multimediale
         create_resp = requests.post(
-            f"{GRAPH_URL}/{IG_USER_ID}/media",
-            data={
-                "media_type": "REELS",
+            f"{IG_GRAPH_URL}/{IG_USER_ID}/media",
+            params={
                 "video_url": video_url,
+                "media_type": "REELS",
                 "caption": caption,
-                "access_token": token_to_use
+                "access_token": IG_PERSONAL_TOKEN,
             }
         )
-        
+
         if not create_resp.ok:
             print(f"❌ Errore creazione container ({create_resp.status_code}): {create_resp.text}")
-            # Se fallisce ancora, prova a stampare i dettagli dell'account per debug
             return False
 
         creation_id = create_resp.json().get("id")
-        
+        if not creation_id:
+            print(f"❌ Nessun ID container nella risposta: {create_resp.json()}")
+            return False
+
+        print(f"✅ Container creato: {creation_id}")
+
         # Step 2: Polling stato
-        for _ in range(20):
+        for attempt in range(24):  # max ~2 minuti (24 × 5s)
             time.sleep(5)
             status_resp = requests.get(
-                f"{GRAPH_URL}/{creation_id}",
-                params={"fields": "status_code,status", "access_token": token_to_use}
+                f"{IG_GRAPH_URL}/{creation_id}",
+                params={
+                    "fields": "status_code,status",
+                    "access_token": IG_PERSONAL_TOKEN,
+                }
             )
             res = status_resp.json()
-            if res.get("status_code") == "FINISHED":
+            status_code = res.get("status_code")
+            print(f"   Stato ({attempt + 1}): {status_code}")
+
+            if status_code == "FINISHED":
                 print("✅ Container pronto.")
                 break
-            if res.get("status_code") in ("ERROR", "EXPIRED"):
+            if status_code in ("ERROR", "EXPIRED"):
                 print(f"❌ Errore processing: {res}")
                 return False
         else:
+            print("❌ Timeout polling stato container.")
             return False
 
         # Step 3: Pubblicazione finale
         publish_resp = requests.post(
-            f"{GRAPH_URL}/{IG_USER_ID}/media_publish",
-            data={"creation_id": creation_id, "access_token": token_to_use}
+            f"{IG_GRAPH_URL}/{IG_USER_ID}/media_publish",
+            headers={"Content-Type": "application/json"},
+            json={
+                "creation_id": creation_id,
+                "access_token": IG_PERSONAL_TOKEN,
+            }
         )
+
+        if not publish_resp.ok:
+            print(f"❌ Errore pubblicazione ({publish_resp.status_code}): {publish_resp.text}")
+            return False
+
         print(f"✅ Reel pubblicato: {publish_resp.json()}")
         return True
 
     except Exception as e:
         print(f"❌ Errore: {e}")
         return False
-
 
 
 # --- GEMINI ---
