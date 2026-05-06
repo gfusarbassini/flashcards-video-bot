@@ -36,7 +36,7 @@ GEMINI_CLIENT = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 # --- TIMEOUT HANDLER ---
 
-TIMEOUT_SECONDS = 180  # 3 minuti
+TIMEOUT_SECONDS = 380  # 3 minuti
 
 def timeout_handler(signum, frame):
     raise TimeoutError("Timeout superato")
