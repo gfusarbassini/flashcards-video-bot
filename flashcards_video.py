@@ -87,6 +87,29 @@ def load_words():
     return valid_words
 
 
+def remove_word_row(words, row_to_remove):
+    """Removes a specific row from the in-memory list and rewrites the CSV
+    to persist the removal. Returns the updated list."""
+    updated_words = [w for w in words if w is not row_to_remove]
+
+    if not os.path.exists(CSV_FILE):
+        return updated_words
+
+    with open(CSV_FILE, newline='', encoding='utf-8') as f:
+        reader = csv.reader(f)
+        try:
+            header = next(reader)
+        except StopIteration:
+            header = list(row_to_remove.keys())
+
+    with open(CSV_FILE, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=header)
+        writer.writeheader()
+        writer.writerows(updated_words)
+
+    return updated_words
+
+
 # --- PUBLICATION STATE MANAGEMENT (cycle, step) ---
 
 def load_state():
@@ -168,12 +191,19 @@ def preflight_check(video_url):
 
 
 def publish_video(word_file):
+    """Attempts to publish a single video. Returns a tuple:
+        (result, reason)
+    where result is True/False and reason is one of:
+        "ok", "preflight_failed", "upload_failed"
+    This lets the caller decide whether to delete the row (preflight_failed)
+    or just report failure without touching the CSV (upload_failed).
+    """
     video_url = f"{VIDEO_BASE_URL}{word_file}"
     print(f"\n--- Publishing: {video_url} ---")
 
     # Preflight: check URL is reachable before hitting Meta
     if not preflight_check(video_url):
-        return False
+        return False, "preflight_failed"
 
     try:
         # Step 1: Create container — log the FULL raw response
@@ -192,7 +222,7 @@ def publish_video(word_file):
 
         if not creation_id:
             print("❌ No container ID returned.")
-            return False
+            return False, "upload_failed"
 
         print(f"✅ Container ID: {creation_id}")
 
@@ -216,12 +246,12 @@ def publish_video(word_file):
                 break
             elif status_code in ("ERROR", "EXPIRED") or "ERROR" in str(status_msg).upper():
                 print(f"❌ Container failed — full response: {res_data}")
-                return False
+                return False, "upload_failed"
             # else IN_PROGRESS / PUBLISHED / empty — keep polling
 
         else:
             print("❌ Timeout waiting for FINISHED.")
-            return False
+            return False, "upload_failed"
 
         # Step 3: Publish
         publish_resp = requests.post(
@@ -230,11 +260,11 @@ def publish_video(word_file):
         )
         print(f"📤 Publish response ({publish_resp.status_code}): {publish_resp.text}")
         publish_resp.raise_for_status()
-        return True
+        return True, "ok"
 
     except requests.exceptions.RequestException as e:
         print(f"❌ Request error: {e}")
-        return False
+        return False, "upload_failed"
 
 
 # --- MAIN ---
@@ -253,27 +283,49 @@ def main():
     step = state["step"]
     print(f"Current state — Cycle: {cycle}, Step: {step}")
 
-    # Determine which word to publish
+    # Determine which word to publish (starting point)
     parola_index = calculate_word_index(cycle, step)
-
     if parola_index < 0:
         print("Index calculation error.")
         return
 
-    list_len = len(words)
-    if parola_index >= list_len:
-        print(f"⚠️ Calculated index ({parola_index}) exceeds word list length ({list_len}). Using last word.")
-        parola_index = list_len - 1
+    published = False
 
-    word_row = words[parola_index]
-    word = word_row.get('Parola', 'N/A')
-    file_video = word_row.get('FileVideo')
+    while True:
+        if not words:
+            print("⚠️ No words left to try. Aborting.")
+            break
 
-    print(f"Publishing word: {word} (index: {parola_index})")
+        list_len = len(words)
+        if parola_index >= list_len:
+            print(f"⚠️ Calculated index ({parola_index}) exceeds word list length ({list_len}). Using last word.")
+            parola_index = list_len - 1
 
-    if publish_video(file_video):
-        print(f"✅ Successfully published: {word}")
+        word_row = words[parola_index]
+        word = word_row.get('Parola', 'N/A')
+        file_video = word_row.get('FileVideo')
 
+        print(f"Publishing word: {word} (index: {parola_index})")
+
+        result, reason = publish_video(file_video)
+
+        if result:
+            print(f"✅ Successfully published: {word}")
+            published = True
+            break
+
+        if reason == "preflight_failed":
+            print(f"🗑️ Video not reachable for '{word}'. Removing row from CSV and trying next word.")
+            words = remove_word_row(words, word_row)
+            # Stay on the same index: the next word has shifted into this slot.
+            # If we were already at/after the end of the list, clamp will handle it
+            # on the next loop iteration.
+            continue
+        else:
+            print(f"❌ Publishing failed for '{word}' (non-preflight error). Stopping — state not updated.")
+            return
+
+    if published:
         # Advance step, reset cycle if complete
         step += 1
         if step > 12:
@@ -284,8 +336,6 @@ def main():
             print(f"➡️ Next → Cycle: {cycle}, Step: {step}")
 
         save_state({"cycle": cycle, "step": step})
-    else:
-        print("❌ Publishing failed. State not updated.")
 
 
 if __name__ == "__main__":
