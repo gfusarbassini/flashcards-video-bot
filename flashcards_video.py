@@ -36,17 +36,55 @@ def check_account():
 
 
 def load_words():
-    """Loads words from the CSV file. Only 'FileVideo' is used for publishing."""
-    words = []
+    """Loads words from the CSV file. Only 'FileVideo' is used for publishing.
+
+    Rows are considered malformed if:
+      - the number of fields doesn't match the header, OR
+      - 'Parola' or 'FileVideo' is missing/empty.
+
+    Malformed rows are silently dropped and the CSV file is rewritten
+    to contain only the valid rows.
+    """
     if not os.path.exists(CSV_FILE):
         print(f"ERROR: Words file not found: {CSV_FILE}")
         return []
 
     with open(CSV_FILE, newline='', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            words.append(row)
-    return words
+        reader = csv.reader(f)
+        try:
+            header = next(reader)
+        except StopIteration:
+            return []
+
+        expected_cols = len(header)
+        valid_words = []
+
+        for raw_row in reader:
+            # Skip completely empty lines
+            if not raw_row:
+                continue
+
+            # Wrong number of columns -> malformed
+            if len(raw_row) != expected_cols:
+                continue
+
+            row = dict(zip(header, raw_row))
+
+            # Missing/empty required fields -> malformed
+            parola = (row.get('Parola') or '').strip()
+            file_video = (row.get('FileVideo') or '').strip()
+            if not parola or not file_video:
+                continue
+
+            valid_words.append(row)
+
+    # Rewrite the CSV keeping only valid rows (silently drops malformed ones)
+    with open(CSV_FILE, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=header)
+        writer.writeheader()
+        writer.writerows(valid_words)
+
+    return valid_words
 
 
 # --- PUBLICATION STATE MANAGEMENT (cycle, step) ---
