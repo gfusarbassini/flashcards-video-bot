@@ -1,0 +1,40 @@
+name: Run cinememes story script
+
+on:
+  repository_dispatch:
+      types: [run_cinememes]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run cinememes story script
+        run: python3 cinememes_story.py
+
+      - name: Commit updated files
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add stato_cinememes.csv || echo "No files to add"
+          git commit -m "Update cinememes state (Trigger: ${{ github.event.client_payload.source || 'Manual' }})" || echo "No changes to commit"
+          git pull --rebase origin main
+          git push
