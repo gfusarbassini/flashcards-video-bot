@@ -33,6 +33,7 @@ jobs:
       - name: Run Quiz Bot
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_QUIZ_TOKEN: ${{ secrets.TELEGRAM_QUIZ_TOKEN }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           INPUT_CHAT_ID: ${{ github.event.inputs.chat_id || github.event.client_payload.chat_id }}

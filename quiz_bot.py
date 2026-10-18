@@ -319,7 +319,7 @@ def main():
     parser.add_argument("--chat-id", type=str, default=None, help="Telegram Chat ID (override)")
     args = parser.parse_args()
 
-    bot_token = os.getenv("TELEGRAM_TOKEN")
+    bot_token = os.getenv("TELEGRAM_QUIZ_TOKEN") or os.getenv("TELEGRAM_TOKEN")
     api_key = os.getenv("GEMINI_API_KEY")
     chat_id = (
         args.chat_id
