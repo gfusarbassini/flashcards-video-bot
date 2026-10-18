@@ -55,11 +55,13 @@ def load_quiz_database():
     """Carica il database dei quiz o ne inizializza uno nuovo se assente."""
     if os.path.exists(QUIZ_CSV):
         try:
-            df = pd.read_csv(QUIZ_CSV)
+            df = pd.read_csv(QUIZ_CSV, dtype=str)
+            df = df.fillna("")
             # Verifica che tutte le colonne siano presenti
             for col in QUIZ_COLUMNS:
                 if col not in df.columns:
                     df[col] = ""
+            df["inviato"] = pd.to_numeric(df["inviato"], errors="coerce").fillna(0).astype(int)
             return df
         except Exception as e:
             print(f"⚠️ Errore caricamento {QUIZ_CSV}, re-inizializzazione: {e}")
@@ -366,8 +368,8 @@ def main():
 
     success = send_quiz_poll_telegram(prossimo_quiz, bot_token, chat_id)
     if success:
-        df_quiz.at[idx_riga, "inviato"] = 1
-        df_quiz.at[idx_riga, "data_invio"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        df_quiz.loc[idx_riga, "inviato"] = 1
+        df_quiz.loc[idx_riga, "data_invio"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         save_quiz_database(df_quiz)
 
 
