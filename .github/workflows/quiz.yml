@@ -1,0 +1,49 @@
+name: Run Russian Quiz Poll
+
+on:
+  repository_dispatch:
+    types: [run_quiz]
+  workflow_dispatch:
+    inputs:
+      chat_id:
+        description: 'Telegram Chat ID (opzionale se già configurato nei Secrets)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  run-quiz:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install requests pandas google-genai
+
+      - name: Run Quiz Bot
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          INPUT_CHAT_ID: ${{ github.event.inputs.chat_id || github.event.client_payload.chat_id }}
+        run: |
+          python3 quiz_bot.py
+
+      - name: Commit updated quiz database
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add quiz_database.csv || echo "No files to add"
+          git commit -m "Update quiz database (Trigger: ${{ github.event.client_payload.source || 'cron' }})" || echo "No changes to commit"
+          git pull --rebase origin main
+          git push
