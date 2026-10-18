@@ -319,7 +319,13 @@ def main():
 
     bot_token = os.getenv("TELEGRAM_TOKEN")
     api_key = os.getenv("GEMINI_API_KEY")
-    chat_id = args.chat_id or os.getenv("INPUT_CHAT_ID") or os.getenv("TELEGRAM_CHAT_ID") or os.getenv("TELEGRAM_CHAT_ID_ADMIN")
+    chat_id = (
+        args.chat_id
+        or os.getenv("INPUT_CHAT_ID")
+        or os.getenv("TELEGRAM_CHAT_ID")
+        or os.getenv("TELEGRAM_CHAT_ID_ADMIN")
+        or "516759354"
+    )
 
     df_parole = load_parole()
     df_quiz = load_quiz_database()
