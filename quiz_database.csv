@@ -1,7 +1,7 @@
 id,parola,livello,tipo,domanda,opzione_0,opzione_1,opzione_2,opzione_3,corretta_idx,spiegazione,inviato,data_invio
 Q0001,Праздновать,B1,aspetto_verbale,Вчера мы весь вечер _____ день рождения лучшего друга.,праздновали,отпраздновали,празднуем,отпразднуют,0,Con espressioni di durata temporale come 'весь вечер' si usa il verbo imperfettivo al passato.,1,2026-10-18 06:41:42
 Q0002,Будильник,A2+,caso_grammaticale,Я проснулся рано утром под громкий звонок _____.,будильником,будильника,будильнику,будильнике,1,Reggenza del nome: 'звонок кого? чего?' richiede il caso genitivo (будильника).,1,2026-10-18 06:53:04
-Q0003,Лошадь,A2+,caso_grammaticale,В деревне дети катались на красивой белой _____.,лошади,лошадь,лошадью,лошадях,0,'Кататься на ком? чём?' richiede il prepositivo; il sostantivo femminile di III declinazione fa -и.,0,
+Q0003,Лошадь,A2+,caso_grammaticale,В деревне дети катались на красивой белой _____.,лошади,лошадь,лошадью,лошадях,0,'Кататься на ком? чём?' richiede il prepositivo; il sostantivo femminile di III declinazione fa -и.,1,2026-10-18 06:56:45
 Q0004,Зарплата,B1,caso_grammaticale,После успешного испытательного срока дирекция повысила ему _____.,зарплаты,зарплатой,зарплату,зарплате,2,Il verbo transitivo 'повысить' regge l'accusativo diretto (кого? что?).,0,
 Q0005,Гордый,B1,reggenza_aggettivi,Родители были очень _____ спортивными успехами своей дочери.,горды,гордые,гордым,гордого,0,L'aggettivo breve 'горды' (o 'горд') regge tipicamente il caso strumentale senza preposizione (чем?).,0,
 Q0006,Оливковое масло,A2+,caso_grammaticale,Она обычно заправляет овощной салат свежим _____.,оливковым маслом,оливкового масла,оливковое масло,оливковому маслу,0,'Заправлять чем?': richiede il caso strumentale singolare neutro (оливковым маслом).,0,
